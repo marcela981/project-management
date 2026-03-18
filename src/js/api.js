@@ -18,12 +18,12 @@ async function apiFetch(path, options = {}) {
 
 export async function fetchTasks() {
     if (!CONFIG.BACKEND_URL) return [];
-    return apiFetch('/api/tasks');
+    return apiFetch('/tasks');
 }
 
 export async function saveTime(taskId, timeSpent, subtaskId = null, feedback = null) {
     if (CONFIG.BACKEND_URL) {
-        await apiFetch(`/api/tasks/${taskId}/time`, {
+        await apiFetch(`/tasks/${taskId}/time`, {
             method: 'POST',
             body: JSON.stringify({ timeSpent, subtaskId, feedback })
         });
@@ -60,7 +60,7 @@ export async function createTask(data) {
     };
 
     if (CONFIG.BACKEND_URL) {
-        const saved = await apiFetch('/api/tasks', {
+        const saved = await apiFetch('/tasks', {
             method: 'POST',
             body: JSON.stringify(newTask)
         });
@@ -76,7 +76,7 @@ export async function createTask(data) {
 
 export async function updateColumn(taskId, column) {
     if (CONFIG.BACKEND_URL) {
-        await apiFetch(`/api/tasks/${taskId}`, {
+        await apiFetch(`/tasks/${taskId}`, {
             method: 'PATCH',
             body: JSON.stringify({ column })
         });
@@ -89,7 +89,7 @@ export async function updateColumn(taskId, column) {
 
 export async function completeTask(taskId) {
     if (CONFIG.BACKEND_URL) {
-        await apiFetch(`/api/tasks/${taskId}/complete`, { method: 'POST' });
+        await apiFetch(`/tasks/${taskId}/complete`, { method: 'POST' });
     }
 
     const task = STATE.tasks.find(t => t.id === taskId);
