@@ -1,29 +1,47 @@
-/** OAuth2 con Nextcloud: token en sessionStorage, intercambio de código vía backend. */
+/** OAuth2 con Nextcloud: token en localStorage (persiste entre refreshes en iframes). */
 
 import { CONFIG } from './config.js';
 
 const TOKEN_KEY = 'nc_access_token';
 const USER_KEY  = 'nc_user_info';
 
+// Fallback en memoria para navegadores que bloquean localStorage en iframes (Safari ITP, etc.)
+const _mem = {};
+
+function _set(key, value) {
+    try { localStorage.setItem(key, value); } catch { _mem[key] = value; }
+}
+
+function _get(key) {
+    try {
+        const v = localStorage.getItem(key);
+        if (v !== null) return v;
+    } catch { /* bloqueado */ }
+    return _mem[key] ?? null;
+}
+
+function _remove(key) {
+    try { localStorage.removeItem(key); } catch { /* bloqueado */ }
+    delete _mem[key];
+}
+
+// ---------------------------------------------------------------------------
+
 export function getToken() {
-    return sessionStorage.getItem(TOKEN_KEY);
+    return _get(TOKEN_KEY);
 }
 
 function _saveToken(token) {
-    sessionStorage.setItem(TOKEN_KEY, token);
+    _set(TOKEN_KEY, token);
 }
 
-// ---------------------------------------------------------------------------
-// Cache del usuario
-// ---------------------------------------------------------------------------
-
 export function getCachedUser() {
-    const raw = sessionStorage.getItem(USER_KEY);
+    const raw = _get(USER_KEY);
     try { return raw ? JSON.parse(raw) : null; } catch { return null; }
 }
 
 function _saveUser(user) {
-    sessionStorage.setItem(USER_KEY, JSON.stringify(user));
+    _set(USER_KEY, JSON.stringify(user));
 }
 
 function _redirectUri() {
@@ -82,8 +100,8 @@ export async function initAuth() {
     let user = getCachedUser();
     if (!user) {
         user = await _fetchUserInfo(token);
-        const words    = (user.displayname || user.id || '').trim().split(/\s+/);
-        user.initials  = words.map(w => w[0]).join('').slice(0, 2).toUpperCase();
+        const words   = (user.displayname || user.id || '').trim().split(/\s+/);
+        user.initials = words.map(w => w[0]).join('').slice(0, 2).toUpperCase();
         _saveUser(user);
     }
 
@@ -91,7 +109,7 @@ export async function initAuth() {
 }
 
 export function logout() {
-    sessionStorage.removeItem(TOKEN_KEY);
-    sessionStorage.removeItem(USER_KEY);
+    _remove(TOKEN_KEY);
+    _remove(USER_KEY);
     window.location.href = _buildAuthUrl();
 }

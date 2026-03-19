@@ -741,7 +741,21 @@ body {
     border: 2px solid transparent;
 }
 
-.deck-item:hover { background: var(--color-border); }
+.deck-item:hover:not(.already-imported) { background: var(--color-border); }
+
+.deck-item.already-imported {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.deck-item.already-imported .deck-item-checkbox {
+    background: var(--color-text-muted);
+    border-color: var(--color-text-muted);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
 
 .deck-item.selected {
     background: var(--color-primary-light);

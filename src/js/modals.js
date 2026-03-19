@@ -155,27 +155,39 @@ export async function selectDeckBoard(boardId) {
             return;
         }
 
+        const importedIds = new Set(
+            STATE.tasks.filter(t => t.deck_card_id).map(t => String(t.deck_card_id))
+        );
+
         cardList.innerHTML = `
             <div class="form-label mb-1" style="margin-top:.75rem;">
                 <i class="fas fa-credit-card"></i>
                 Cards (${_deckCards.length}) — click to select
             </div>
             <div class="deck-list">
-                ${_deckCards.map(card => `
-                    <div class="deck-item" data-deck-id="${card.id}"
-                         onclick="toggleDeckSelection('${card.id}')">
+                ${_deckCards.map(card => {
+                    const alreadyImported = importedIds.has(String(card.id));
+                    return `
+                    <div class="deck-item${alreadyImported ? ' already-imported' : ''}"
+                         data-deck-id="${card.id}"
+                         ${alreadyImported ? '' : `onclick="toggleDeckSelection('${card.id}')"`}>
                         <div class="deck-item-checkbox">
-                            <i class="fas fa-check" style="display:none;"></i>
+                            ${alreadyImported
+                                ? '<i class="fas fa-check-double" title="Already imported"></i>'
+                                : '<i class="fas fa-check" style="display:none;"></i>'}
                         </div>
                         <div class="deck-item-content">
                             <div class="deck-item-title">${card.title}</div>
                             <div class="deck-item-meta">
-                                ${card.duedate
-                                    ? `<i class="fas fa-calendar"></i> ${formatDate(card.duedate.split('T')[0])}`
-                                    : 'No deadline'}
+                                ${alreadyImported
+                                    ? '<i class="fas fa-ban"></i> Already imported'
+                                    : card.duedate
+                                        ? `<i class="fas fa-calendar"></i> ${formatDate(card.duedate.split('T')[0])}`
+                                        : 'No deadline'}
                             </div>
                         </div>
-                    </div>`).join('')}
+                    </div>`;
+                }).join('')}
             </div>`;
 
     } catch (err) {
@@ -206,26 +218,38 @@ export async function importSelectedDeckCards() {
         return;
     }
 
+    const btn = document.getElementById('btnImportSelected');
+    if (btn) btn.disabled = true;
+
+    const importedIds = new Set(
+        STATE.tasks.filter(t => t.deck_card_id).map(t => String(t.deck_card_id))
+    );
+
+    let count = 0;
     for (const deckId of STATE.selectedDeckCards) {
+        if (importedIds.has(String(deckId))) continue; // idempotencia: saltar duplicados
+
         const card = _deckCards.find(c => String(c.id) === String(deckId));
         if (!card) continue;
 
         await createTask({
-            title:       card.title,
-            description: card.description ?? '',
-            column:      'actively-working',
-            type:        'project',
-            priority:    'medium',
-            startDate:   new Date().toISOString().split('T')[0],
-            deadline:    card.duedate ? card.duedate.split('T')[0] : null,
-            subtasks:    [],
+            deck_card_id: card.id,
+            title:        card.title,
+            description:  card.description ?? '',
+            column:       'actively-working',
+            type:         'project',
+            priority:     'medium',
+            startDate:    new Date().toISOString().split('T')[0],
+            deadline:     card.duedate ? card.duedate.split('T')[0] : null,
+            subtasks:     [],
         });
+        count++;
     }
 
-    const count = STATE.selectedDeckCards.size;
     closeModal('modalImportDeck');
     renderBoard();
-    alert(`${count} card(s) imported successfully!`);
+    if (count > 0) alert(`${count} card(s) imported successfully!`);
+    if (btn) btn.disabled = false;
 }
 
 export function openTaskDetail(taskId) {
