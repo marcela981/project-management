@@ -82,7 +82,14 @@ export async function submitNewTask() {
 
     if (CONFIG.BACKEND_URL) {
         try {
-            STATE.tasks = await fetchTasks();
+            const fetched = await fetchTasks();
+            // Si `fetchTasks()` viene vacío, típicamente es porque el backend
+            // está filtrando por auth y la petición GET no llega con token.
+            // No sobreescribimos el estado local para no "perder" la card
+            // recién creada/importada (createTask ya la agrega al STATE).
+            if (Array.isArray(fetched) && fetched.length > 0) {
+                STATE.tasks = fetched;
+            }
         } catch (err) {
             console.error('[submitNewTask] Error al recargar tareas:', err);
         }
@@ -257,7 +264,12 @@ export async function importSelectedDeckCards() {
 
     if (CONFIG.BACKEND_URL) {
         try {
-            STATE.tasks = await fetchTasks();
+            const fetched = await fetchTasks();
+            // Mismo criterio que submitNewTask: evita sobrescribir con `[]`
+            // cuando fallan auth/filtrado en el backend.
+            if (Array.isArray(fetched) && fetched.length > 0) {
+                STATE.tasks = fetched;
+            }
         } catch (err) {
             console.error('[importSelectedDeckCards] Error al recargar tareas:', err);
         }
