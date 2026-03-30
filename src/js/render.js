@@ -60,11 +60,14 @@ export function createTaskCard(task) {
     const showSubtaskSelector = showTimer && task.type !== 'activity';
 
     const activeSubtaskId = isActiveTimer ? timer.subtaskId : null;
+    const activeSubtask = activeSubtaskId && activeSubtaskId !== 'none'
+        ? task.subtasks.find(s => s.id === activeSubtaskId)
+        : null;
     const subtaskOptions = [
-        `<option value="none"${!activeSubtaskId || activeSubtaskId === 'none' ? ' selected' : ''}>-- No specific subtask --</option>`,
+        `<option value="none">-- No specific subtask --</option>`,
         ...task.subtasks
             .filter(s => !s.completed)
-            .map(s => `<option value="${s.id}"${activeSubtaskId === s.id ? ' selected' : ''}>${s.text}</option>`)
+            .map(s => `<option value="${s.id}">${s.text}</option>`)
     ].join('');
 
     const timerSeconds = isActiveTimer
@@ -115,9 +118,10 @@ export function createTaskCard(task) {
             ${showSubtaskSelector ? `
             <div class="subtask-selector">
                 <label>Working on:</label>
-                <select id="subtask-select-${task.id}" ${isActiveTimer ? 'disabled' : ''}>
-                    ${subtaskOptions}
-                </select>
+                ${isActiveTimer
+                    ? `<div class="active-subtask-name">${activeSubtask ? activeSubtask.text : '<span class="no-subtask">— General task —</span>'}</div>`
+                    : `<select id="subtask-select-${task.id}">${subtaskOptions}</select>`
+                }
             </div>` : ''}
             <div class="task-timer">
                 <span class="timer-display ${isActiveTimer ? 'running' : ''}" id="timer-${task.id}">

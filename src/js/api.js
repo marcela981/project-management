@@ -4,7 +4,7 @@ import { CONFIG }    from './config.js';
 import { STATE }     from './state.js';
 import { save }      from './storage.js';
 import { generateId } from './utils.js';
-import { getToken }  from './auth.js';
+import { getToken, logout }  from './auth.js';
 
 async function apiFetch(path, options = {}) {
     const token = getToken();
@@ -15,6 +15,10 @@ async function apiFetch(path, options = {}) {
         },
         ...options,
     });
+    if (response.status === 401) {
+        logout();
+        return;
+    }
     if (!response.ok) {
         throw new Error(`API error ${response.status}: ${response.statusText}`);
     }

@@ -475,6 +475,21 @@ body {
     box-shadow: 0 0 0 2px var(--color-primary-light);
 }
 
+.active-subtask-name {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--color-primary);
+    padding: 0.4rem 0.5rem;
+    background: var(--color-primary-light);
+    border-radius: var(--radius-sm);
+    border-left: 3px solid var(--color-primary);
+}
+
+.active-subtask-name .no-subtask {
+    font-weight: 400;
+    color: var(--color-text-secondary);
+}
+
 .task-timer {
     display: flex;
     align-items: center;
