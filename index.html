@@ -22,13 +22,13 @@
           </div>
         </div>
         <div class="header-actions">
-          <button class="btn btn-secondary" onclick="openNewTaskModal('activity')">
+          <button class="btn btn-secondary" data-action="new-task" data-type="activity">
             <i class="fas fa-bolt"></i> New Activity
           </button>
-          <button class="btn btn-secondary" onclick="openImportDeckModal()">
+          <button class="btn btn-secondary" data-action="open-import-deck">
             <i class="fas fa-cloud-download-alt"></i> Import from Deck
           </button>
-          <button class="btn btn-primary" onclick="openNewTaskModal('project')">
+          <button class="btn btn-primary" data-action="new-task" data-type="project">
             <i class="fas fa-plus"></i> New Task
           </button>
           <div class="user-info">
@@ -115,7 +115,7 @@
       <div class="modal">
         <div class="modal-header">
           <h2 class="modal-title" id="modalNewTaskTitle">New Task</h2>
-          <button class="modal-close" onclick="closeModal('modalNewTask')" aria-label="Close">
+          <button class="modal-close" data-action="close-modal" data-modal-id="modalNewTask" aria-label="Close">
             <i class="fas fa-times"></i>
           </button>
         </div>
@@ -162,14 +162,14 @@
               <label class="form-label">Subtasks</label>
             </div>
             <div id="subtasksContainer"></div>
-            <button type="button" class="btn btn-secondary btn-sm" onclick="addSubtaskInput()">
+            <button type="button" class="btn btn-secondary btn-sm" data-action="add-subtask">
               <i class="fas fa-plus"></i> Add Subtask
             </button>
           </div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeModal('modalNewTask')">Cancel</button>
-          <button class="btn btn-primary" onclick="submitNewTask()">
+          <button class="btn btn-secondary" data-action="close-modal" data-modal-id="modalNewTask">Cancel</button>
+          <button class="btn btn-primary" data-action="submit-task">
             <i class="fas fa-check"></i> Create
           </button>
         </div>
@@ -180,7 +180,7 @@
       <div class="modal">
         <div class="modal-header">
           <h2 class="modal-title">Import from Nextcloud Deck</h2>
-          <button class="modal-close" onclick="closeModal('modalImportDeck')" aria-label="Close">
+          <button class="modal-close" data-action="close-modal" data-modal-id="modalImportDeck" aria-label="Close">
             <i class="fas fa-times"></i>
           </button>
         </div>
@@ -188,8 +188,8 @@
           <div id="deckModalContent"></div>
         </div>
         <div class="modal-footer">
-          <button class="btn btn-secondary" onclick="closeModal('modalImportDeck')">Cancel</button>
-          <button id="btnImportSelected" class="btn btn-primary" onclick="importSelectedDeckCards()">
+          <button class="btn btn-secondary" data-action="close-modal" data-modal-id="modalImportDeck">Cancel</button>
+          <button id="btnImportSelected" class="btn btn-primary" data-action="import-deck-cards">
             <i class="fas fa-cloud-download-alt"></i> Import Selected
           </button>
         </div>
@@ -200,7 +200,7 @@
       <div class="modal">
         <div class="modal-header">
           <h2 class="modal-title" id="modalDetailTitle">Task Detail</h2>
-          <button class="modal-close" onclick="closeModal('modalTaskDetail')" aria-label="Close">
+          <button class="modal-close" data-action="close-modal" data-modal-id="modalTaskDetail" aria-label="Close">
             <i class="fas fa-times"></i>
           </button>
         </div>
@@ -214,7 +214,7 @@
       <div class="modal" style="max-width:420px;">
         <div class="modal-header">
           <h2 class="modal-title">¿Sigues trabajando?</h2>
-          <button class="modal-close" onclick="closeTimerNotif()" aria-label="Close">
+          <button class="modal-close" data-action="close-timer-notif" aria-label="Close">
             <i class="fas fa-times"></i>
           </button>
         </div>
@@ -228,7 +228,7 @@
       <div class="modal" style="max-width:420px;">
         <div class="modal-header">
           <h2 class="modal-title">Detener o finalizar</h2>
-          <button class="modal-close" onclick="closeTimerAction()" aria-label="Close">
+          <button class="modal-close" data-action="close-timer-action" aria-label="Close">
             <i class="fas fa-times"></i>
           </button>
         </div>

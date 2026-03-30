@@ -70,7 +70,7 @@ export function openEditTaskModal(taskId) {
         div.style.cssText = 'display: flex; gap: 0.5rem; margin-bottom: 0.5rem;';
         div.innerHTML = `
             <input type="text" class="form-input subtask-input" placeholder="Subtask ${index + 1}..." value="${sub.text ?? ''}">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="this.parentElement.remove()">
+            <button type="button" class="btn btn-secondary btn-sm" data-action="remove-parent">
                 <i class="fas fa-times"></i>
             </button>`;
         container.appendChild(div);
@@ -90,7 +90,7 @@ export function addSubtaskInput() {
     div.style.cssText = 'display: flex; gap: 0.5rem; margin-bottom: 0.5rem;';
     div.innerHTML = `
         <input type="text" class="form-input subtask-input" placeholder="Subtask ${index + 1}...">
-        <button type="button" class="btn btn-secondary btn-sm" onclick="this.parentElement.remove()">
+        <button type="button" class="btn btn-secondary btn-sm" data-action="remove-parent">
             <i class="fas fa-times"></i>
         </button>`;
 
@@ -253,7 +253,7 @@ export async function openImportDeckModal() {
                     <i class="fas fa-columns"></i> Select a board
                 </label>
                 <select id="deckBoardSelect" class="form-select"
-                        onchange="selectDeckBoard(this.value)">
+                        data-action="select-deck-board">
                     <option value="">-- Choose a board --</option>
                     ${boards.map(b => `
                         <option value="${b.id}">${_boardTitle(b)}</option>
@@ -307,7 +307,7 @@ export async function selectDeckBoard(boardId) {
                     return `
                     <div class="deck-item${alreadyImported ? ' already-imported' : ''}"
                          data-deck-id="${card.id}"
-                         ${alreadyImported ? '' : `onclick="toggleDeckSelection('${card.id}')"`}>
+                         ${alreadyImported ? '' : `data-action="toggle-deck" data-deck-id="${card.id}"`}>
                         <div class="deck-item-checkbox">
                             ${alreadyImported
                                 ? '<i class="fas fa-check-double" title="Already imported"></i>'
@@ -438,7 +438,7 @@ export function openTaskDetail(taskId) {
                 <span id="detail-time-display" style="font-size:1.5rem; font-weight:600; color:var(--color-primary);">
                     ${formatTime(task.timeSpent)}
                 </span>
-                <button class="task-menu-btn" onclick="openTimeEdit('${task.id}')" title="Edit time">
+                <button class="task-menu-btn" data-action="open-time-edit" data-task-id="${task.id}" title="Edit time">
                     <i class="fas fa-pencil-alt"></i>
                 </button>
             </div>
@@ -453,10 +453,10 @@ export function openTaskDetail(taskId) {
                     <input type="number" id="detail-time-s" class="form-input" style="width:68px;"
                            min="0" max="59" placeholder="s" value="${task.timeSpent % 60}">
                     <span>s</span>
-                    <button class="btn btn-primary btn-sm" onclick="saveTimeEdit('${task.id}')">
+                    <button class="btn btn-primary btn-sm" data-action="save-time-edit" data-task-id="${task.id}">
                         <i class="fas fa-save"></i> Save
                     </button>
-                    <button class="btn btn-secondary btn-sm" onclick="cancelTimeEdit()">Cancel</button>
+                    <button class="btn btn-secondary btn-sm" data-action="cancel-time-edit">Cancel</button>
                 </div>
             </div>
         </div>
@@ -481,7 +481,7 @@ export function openTaskDetail(taskId) {
                 <div class="subtasks-list mt-1">
                     ${task.subtasks.map(sub => `
                         <div class="subtask-item ${sub.completed ? 'completed' : ''}"
-                             onclick="toggleSubtask('${task.id}', '${sub.id}')">
+                             data-action="toggle-subtask" data-task-id="${task.id}" data-subtask-id="${sub.id}">
                             <div class="subtask-checkbox">
                                 ${sub.completed ? '<i class="fas fa-check"></i>' : ''}
                             </div>
@@ -508,7 +508,7 @@ export function openTaskDetail(taskId) {
             </div>` : ''}`;
 
     document.getElementById('modalDetailFooter').innerHTML = `
-        <button class="btn btn-secondary" onclick="closeModal('modalTaskDetail')">Close</button>`;
+        <button class="btn btn-secondary" data-action="close-modal" data-modal-id="modalTaskDetail">Close</button>`;
 
     _openModal('modalTaskDetail');
 }

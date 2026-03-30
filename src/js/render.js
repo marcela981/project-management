@@ -52,17 +52,18 @@ export function createTaskCard(task) {
     const totalCount      = task.subtasks.length;
     const progressPercent = task.progress
         || (totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0);
-    const isComplete   = progressPercent === 100;
-    const overdueClass = isOverdue(task.deadline) && !isComplete ? 'overdue' : '';
+    const isComplete    = progressPercent === 100;
+    const overdueClass  = isOverdue(task.deadline) && !isComplete ? 'overdue' : '';
     const completeClass = isComplete ? 'complete' : '';
 
-    const showTimer = task.column === 'working-now' || task.column === 'activities';
+    const showTimer          = task.column === 'working-now' || task.column === 'activities';
     const showSubtaskSelector = showTimer && task.type !== 'activity';
 
     const activeSubtaskId = isActiveTimer ? timer.subtaskId : null;
-    const activeSubtask = activeSubtaskId && activeSubtaskId !== 'none'
+    const activeSubtask   = activeSubtaskId && activeSubtaskId !== 'none'
         ? task.subtasks.find(s => s.id === activeSubtaskId)
         : null;
+
     const savedSubId = STATE.selectedSubtasks[task.id];
     const subtaskOptions = [
         `<option value="none"${!savedSubId || savedSubId === 'none' ? ' selected' : ''}>-- No specific subtask --</option>`,
@@ -80,13 +81,13 @@ export function createTaskCard(task) {
         <div class="task-header">
             <span class="task-title">${task.title}</span>
             <div style="display:flex;gap:0.25rem;align-items:center;">
-                <button class="task-menu-btn" onclick="openEditTaskModal('${task.id}')" title="Edit task">
+                <button class="task-menu-btn" data-action="edit-task" data-task-id="${task.id}" title="Edit task">
                     <i class="fas fa-pencil-alt"></i>
                 </button>
-                <button class="task-menu-btn" onclick="confirmDeleteTask('${task.id}')" title="Delete task">
+                <button class="task-menu-btn" data-action="delete-task" data-task-id="${task.id}" title="Delete task">
                     <i class="fas fa-trash"></i>
                 </button>
-                <button class="task-menu-btn" onclick="openTaskDetail('${task.id}')" title="View detail">
+                <button class="task-menu-btn" data-action="task-detail" data-task-id="${task.id}" title="View detail">
                     <i class="fas fa-expand"></i>
                 </button>
             </div>
@@ -121,7 +122,7 @@ export function createTaskCard(task) {
                 <label>Working on:</label>
                 ${isActiveTimer
                     ? `<div class="active-subtask-name">${activeSubtask ? activeSubtask.text : '<span class="no-subtask">— General task —</span>'}</div>`
-                    : `<select id="subtask-select-${task.id}" onchange="setSubtaskSelection('${task.id}', this.value)">${subtaskOptions}</select>`
+                    : `<select data-action="select-subtask" data-task-id="${task.id}">${subtaskOptions}</select>`
                 }
             </div>` : ''}
             <div class="task-timer">
@@ -130,13 +131,13 @@ export function createTaskCard(task) {
                 </span>
                 <div class="timer-controls">
                     ${isActiveTimer ? `
-                        <button class="timer-btn pause" onclick="pauseTimer('${task.id}')" title="Pause">
+                        <button class="timer-btn pause" data-action="pause-timer" data-task-id="${task.id}" title="Pause">
                             <i class="fas fa-pause"></i>
                         </button>
-                        <button class="timer-btn stop" onclick="stopTimer('${task.id}')" title="Finish">
+                        <button class="timer-btn stop" data-action="stop-timer" data-task-id="${task.id}" title="Finish">
                             <i class="fas fa-check"></i>
                         </button>` : `
-                        <button class="timer-btn start" onclick="startTimer('${task.id}')" title="Start">
+                        <button class="timer-btn start" data-action="start-timer" data-task-id="${task.id}" title="Start">
                             <i class="fas fa-play"></i>
                         </button>`}
                 </div>

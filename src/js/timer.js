@@ -148,10 +148,10 @@ export function timerNotifNo(taskId, type) {
             <strong>"${task.title}"</strong>?
         </p>`;
     document.getElementById('timerActionFooter').innerHTML = `
-        <button class="btn btn-secondary" onclick="timerActionStop('${taskId}', '${type}')">
+        <button class="btn btn-secondary" data-action="timer-stop" data-task-id="${taskId}" data-type="${type}">
             <i class="fas fa-stop"></i> Detener
         </button>
-        <button class="btn btn-primary" onclick="timerActionFinalize('${taskId}', '${type}')">
+        <button class="btn btn-primary" data-action="timer-finalize" data-task-id="${taskId}" data-type="${type}">
             <i class="fas fa-check-double"></i> Finalizar
         </button>`;
 
@@ -209,8 +209,8 @@ function _showTimerNotification(taskId, type) {
             ¿Sigues trabajando en ella?
         </p>`;
     document.getElementById('timerNotifFooter').innerHTML = `
-        <button class="btn btn-secondary" onclick="timerNotifNo('${taskId}', '${type}')">No</button>
-        <button class="btn btn-primary"   onclick="closeTimerNotif()">Sí</button>`;
+        <button class="btn btn-secondary" data-action="timer-notif-no" data-task-id="${taskId}" data-type="${type}">No</button>
+        <button class="btn btn-primary"   data-action="close-timer-notif">Sí</button>`;
 
     document.getElementById('modalTimerNotif').classList.add('active');
 }
@@ -243,8 +243,8 @@ function _openPauseFeedbackModal(taskId, elapsedTime) {
         </div>`;
 
     document.getElementById('modalDetailFooter').innerHTML = `
-        <button class="btn btn-secondary" onclick="cancelPause('${taskId}')">Cancel</button>
-        <button class="btn btn-primary"   onclick="confirmPause('${taskId}', ${elapsedTime})">
+        <button class="btn btn-secondary" data-action="cancel-pause" data-task-id="${taskId}">Cancel</button>
+        <button class="btn btn-primary"   data-action="confirm-pause" data-task-id="${taskId}" data-elapsed="${elapsedTime}">
             <i class="fas fa-save"></i> Save &amp; Pause
         </button>`;
 

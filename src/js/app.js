@@ -1,76 +1,98 @@
-/** Punto de entrada: OAuth, carga de datos, funciones en window para onclick. */
+/** Punto de entrada: OAuth, carga de datos, event delegation central. */
 
-import { STATE }           from './state.js';
-import { load }            from './storage.js';
-import { fetchTasks }      from './api.js';
-import { renderBoard }     from './render.js';
+import { STATE }            from './state.js';
+import { load }             from './storage.js';
+import { fetchTasks }       from './api.js';
+import { renderBoard }      from './render.js';
 import { setupDragAndDrop } from './dragDrop.js';
-import { initAuth }        from './auth.js';
-import { CONFIG }          from './config.js';
+import { initAuth }         from './auth.js';
+import { CONFIG }           from './config.js';
 
 import {
-    openNewTaskModal,
-    openEditTaskModal,
-    openImportDeckModal,
-    openTaskDetail,
-    closeModal,
-    addSubtaskInput,
-    submitNewTask,
-    toggleSubtask,
-    toggleDeckSelection,
-    importSelectedDeckCards,
-    selectDeckBoard,
-    confirmDeleteTask,
-    openTimeEdit,
-    cancelTimeEdit,
-    saveTimeEdit,
+    openNewTaskModal, openEditTaskModal, openImportDeckModal,
+    openTaskDetail, closeModal, addSubtaskInput, submitNewTask,
+    toggleSubtask, toggleDeckSelection, importSelectedDeckCards,
+    selectDeckBoard, confirmDeleteTask, openTimeEdit, cancelTimeEdit, saveTimeEdit,
 } from './modals.js';
 
 import {
-    startTimer,
-    pauseTimer,
-    stopTimer,
-    cancelPause,
-    confirmPause,
-    closeTimerNotif,
-    timerNotifNo,
-    closeTimerAction,
-    timerActionFinalize,
-    timerActionStop,
+    startTimer, pauseTimer, stopTimer, cancelPause, confirmPause,
+    closeTimerNotif, timerNotifNo, closeTimerAction, timerActionFinalize, timerActionStop,
 } from './timer.js';
+
+// ---------------------------------------------------------------------------
+// Funciones locales (no necesitan ser globales)
+// ---------------------------------------------------------------------------
 
 function setSubtaskSelection(taskId, subtaskId) {
     STATE.selectedSubtasks[taskId] = subtaskId;
 }
 
-Object.assign(window, {
-    setSubtaskSelection,
-    openNewTaskModal,
-    openEditTaskModal,
-    openImportDeckModal,
-    openTaskDetail,
-    closeModal,
-    addSubtaskInput,
-    submitNewTask,
-    toggleSubtask,
-    toggleDeckSelection,
-    importSelectedDeckCards,
-    selectDeckBoard,
-    confirmDeleteTask,
-    openTimeEdit,
-    cancelTimeEdit,
-    saveTimeEdit,
-    startTimer,
-    pauseTimer,
-    stopTimer,
-    cancelPause,
-    confirmPause,
-    closeTimerNotif,
-    timerNotifNo,
-    closeTimerAction,
-    timerActionFinalize,
-    timerActionStop,
-});
+// ---------------------------------------------------------------------------
+// Event delegation: un único listener maneja toda la UI
+// ---------------------------------------------------------------------------
+
+async function handleClick(e) {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+
+    const { action, taskId, subtaskId, modalId, type, elapsed, deckId } = el.dataset;
+
+    switch (action) {
+        // Tareas
+        case 'new-task':          openNewTaskModal(type); break;
+        case 'edit-task':         openEditTaskModal(taskId); break;
+        case 'delete-task':       await confirmDeleteTask(taskId); break;
+        case 'task-detail':       openTaskDetail(taskId); break;
+        case 'submit-task':       await submitNewTask(); break;
+        case 'toggle-subtask':    toggleSubtask(taskId, subtaskId); break;
+
+        // Formulario de nueva/editar tarea
+        case 'add-subtask':       addSubtaskInput(); break;
+        case 'remove-parent':     el.parentElement.remove(); break;
+
+        // Tiempo
+        case 'open-time-edit':    openTimeEdit(taskId); break;
+        case 'save-time-edit':    await saveTimeEdit(taskId); break;
+        case 'cancel-time-edit':  cancelTimeEdit(); break;
+
+        // Timer
+        case 'start-timer':       startTimer(taskId); break;
+        case 'pause-timer':       pauseTimer(taskId); break;
+        case 'stop-timer':        await stopTimer(taskId); break;
+        case 'cancel-pause':      cancelPause(taskId); break;
+        case 'confirm-pause':     await confirmPause(taskId, parseInt(elapsed, 10)); break;
+
+        // Notificaciones de timer
+        case 'close-timer-notif': closeTimerNotif(); break;
+        case 'timer-notif-no':    timerNotifNo(taskId, type); break;
+        case 'close-timer-action': closeTimerAction(); break;
+        case 'timer-finalize':    await timerActionFinalize(taskId, type); break;
+        case 'timer-stop':        timerActionStop(taskId, type); break;
+
+        // Deck
+        case 'open-import-deck':  await openImportDeckModal(); break;
+        case 'toggle-deck':       toggleDeckSelection(deckId); break;
+        case 'import-deck-cards': await importSelectedDeckCards(); break;
+
+        // Modales
+        case 'close-modal':       closeModal(modalId); break;
+    }
+}
+
+function handleChange(e) {
+    const el = e.target.closest('[data-action]');
+    if (!el) return;
+    const { action, taskId } = el.dataset;
+    switch (action) {
+        case 'select-subtask':    setSubtaskSelection(taskId, el.value); break;
+        case 'select-deck-board': selectDeckBoard(el.value); break;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Inicialización
+// ---------------------------------------------------------------------------
 
 async function init() {
     const user = await initAuth();
@@ -82,7 +104,7 @@ async function init() {
         }
         if (CONFIG.NEXTCLOUD_OAUTH_CLIENT_ID) return;
     } else {
-        document.getElementById('userAvatar').textContent = user.initials  || '?';
+        document.getElementById('userAvatar').textContent = user.initials   || '?';
         document.getElementById('userName').textContent   = user.displayname || user.id || 'User';
     }
 
@@ -91,16 +113,18 @@ async function init() {
     if (CONFIG.BACKEND_URL) {
         try {
             const fetched = await fetchTasks();
-            if (Array.isArray(fetched) && fetched.length > 0) {
-                STATE.tasks = fetched;
-            }
+            if (Array.isArray(fetched) && fetched.length > 0) STATE.tasks = fetched;
         } catch (err) {
-            console.error('[init] Error al cargar tareas del backend:', err);
+            console.error('[init] Error al cargar tareas:', err);
         }
     }
 
     renderBoard();
     setupDragAndDrop();
+
+    // Event delegation — un único listener para toda la app
+    document.addEventListener('click',  handleClick);
+    document.addEventListener('change', handleChange);
 
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
