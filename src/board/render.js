@@ -1,8 +1,8 @@
 /** Render del tablero kanban y tarjetas de tarea. */
 
-import { STATE }      from './state.js';
-import { updateKPIs } from './kpi.js';
-import { formatTime, formatDate, isOverdue, getActivityTypeLabel, formatTimeCompact, formatLogDate, formatRelativeTime, formatTimeOfDay } from './utils.js';
+import { STATE }      from '../core/state.js';
+import { updateKPIs } from '../kpi/kpi.js';
+import { formatTime, formatDate, isOverdue, getActivityTypeLabel, formatTimeCompact, formatLogDate, formatRelativeTime, formatTimeOfDay } from '../shared/utils.js';
 
 export function renderBoard() {
     const columns = {

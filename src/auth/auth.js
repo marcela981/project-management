@@ -1,6 +1,6 @@
 /** OAuth2 con Nextcloud: token en localStorage (persiste entre refreshes en iframes). */
 
-import { CONFIG } from './config.js';
+import { CONFIG } from '../core/config.js';
 
 const TOKEN_KEY = 'nc_access_token';
 const USER_KEY  = 'nc_user_info';

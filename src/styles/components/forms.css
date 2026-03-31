@@ -1,0 +1,131 @@
+.form-group {
+    margin-bottom: 1.25rem;
+}
+
+.form-label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.form-input,
+.form-select,
+.form-textarea {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 0.9375rem;
+    font-family: inherit;
+    color: var(--color-text-primary);
+    background: var(--color-surface);
+    transition: all var(--transition-fast);
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.form-textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+@media (max-width: 480px) {
+    .form-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Subtasks list (task detail) */
+.subtasks-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.subtask-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--color-secondary-light);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.subtask-item:hover { background: var(--color-border); }
+
+.subtask-item.selected {
+    background: var(--color-primary-light);
+    border: 1px solid var(--color-primary);
+}
+
+.subtask-checkbox {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--color-border);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: all var(--transition-fast);
+}
+
+.subtask-item.completed .subtask-checkbox {
+    background: var(--color-success);
+    border-color: var(--color-success);
+    color: white;
+}
+
+.subtask-text { flex: 1; font-size: 0.9375rem; }
+
+.subtask-item.completed .subtask-text {
+    text-decoration: line-through;
+    color: var(--color-text-muted);
+}
+
+.subtask-time {
+    font-size: 0.75rem;
+    color: var(--color-text-muted);
+    font-family: monospace;
+}
+
+/* Help visible checkbox (pause modal) */
+.help-visible-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.625rem;
+    padding: 0.75rem;
+    margin-top: 0.75rem;
+    background: var(--color-warning-light);
+    border: 1px solid var(--color-warning);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-size: 0.8125rem;
+    color: var(--color-text-primary);
+    line-height: 1.4;
+}
+
+.help-visible-label input[type="checkbox"] {
+    margin-top: 0.125rem;
+    flex-shrink: 0;
+    cursor: pointer;
+    accent-color: var(--color-primary);
+    width: 16px;
+    height: 16px;
+}

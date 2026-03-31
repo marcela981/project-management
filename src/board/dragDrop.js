@@ -1,7 +1,7 @@
 /** Drag & drop en el kanban; reglas: una tarea en "Working Now", actividades solo en columna Activities. */
 
-import { STATE }        from './state.js';
-import { updateColumn } from './api.js';
+import { STATE }        from '../core/state.js';
+import { updateColumn } from '../api/api.js';
 import { renderBoard }  from './render.js';
 
 let draggedTaskId = null;

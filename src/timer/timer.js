@@ -1,11 +1,12 @@
 /** Cronómetro por tarea; pausa guarda progreso y observación. */
 
-import { STATE }                    from './state.js';
-import { saveTime, completeTask, updateTask } from './api.js';
-import { save }                              from './storage.js';
-import { renderBoard }              from './render.js';
-import { closeModal, openCompletionModal } from './modals.js';
-import { formatTime }               from './utils.js';
+import { STATE }      from '../core/state.js';
+import { saveTime, completeTask, updateTask } from '../api/api.js';
+import { save }        from '../core/storage.js';
+import { renderBoard } from '../board/render.js';
+import { formatTime }  from '../shared/utils.js';
+import { closeModal }  from '../shared/modal.js';
+import { openCompletionModal } from './completionModal.js';
 
 // Umbrales de notificación: proyecto 3h, actividad 1h
 const NOTIFY_THRESHOLD = { project: 3 * 3600, activity: 1 * 3600 };
@@ -66,17 +67,14 @@ export async function stopTimer(taskId) {
 
     if (subtaskId && subtaskId !== 'none') {
         const sub = task.subtasks.find(s => s.id === subtaskId);
-        // Calcular si esta subtarea llevaría el progreso al 100%
         const completedAfter = task.subtasks.filter(s => s.completed || s.id === subtaskId).length;
         const progressAfter  = Math.round((completedAfter / task.subtasks.length) * 100);
 
         if (progressAfter === 100 && task.type === 'project') {
-            // Delegar cierre al modal de dificultad/obstáculos
             openCompletionModal(taskId, elapsed, subtaskId);
             return;
         }
 
-        // Subtarea que no completa la tarea entera
         await saveTime(taskId, elapsed, subtaskId, {});
         if (sub) sub.completed = true;
         const done = task.subtasks.filter(s => s.completed).length;
@@ -84,11 +82,9 @@ export async function stopTimer(taskId) {
         await updateTask(taskId, { subtasks: task.subtasks, progress: task.progress });
     } else {
         if (task.type === 'project') {
-            // Delegar cierre al modal de dificultad/obstáculos
             openCompletionModal(taskId, elapsed, null);
             return;
         }
-        // Actividad: completar directamente
         await saveTime(taskId, elapsed, subtaskId, { progress: 100 });
         await completeTask(taskId);
     }
@@ -117,7 +113,6 @@ export function cancelPause(taskId) {
     if (task) {
         const type      = task.type;
         const prev      = STATE.timers[type];
-        // Preservar el tiempo ya transcurrido antes de la pausa y la subtarea activa
         const prevElapsed   = prev ? Math.floor((Date.now() - prev.startTime) / 1000) : 0;
         const prevSubtaskId = prev?.subtaskId ?? null;
         const prevAccum     = prev ? prev.accumulated + prevElapsed : (task.timeSpent ?? 0);
@@ -219,7 +214,6 @@ function _tick(taskId, type) {
     const elapsed = _elapsed(type);
     el.textContent = formatTime(timer.accumulated + elapsed);
 
-    // Mostrar notificación cada vez que se alcanza el próximo umbral
     if (elapsed >= timer.nextNotifyAt) {
         timer.nextNotifyAt += NOTIFY_THRESHOLD[type];
         _showTimerNotification(taskId, type);

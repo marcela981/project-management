@@ -1,7 +1,7 @@
 /** KPIs: tareas activas, tiempo total, efectividad, completadas. */
 
-import { STATE } from './state.js';
-import { formatTime, calculateEffectiveness } from './utils.js';
+import { STATE } from '../core/state.js';
+import { formatTime, calculateEffectiveness } from '../shared/utils.js';
 
 export function updateKPIs() {
     const projectTasks = STATE.tasks.filter(t => t.type === 'project');

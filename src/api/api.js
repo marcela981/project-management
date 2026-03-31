@@ -1,10 +1,10 @@
 /** Capa de datos: REST + localStorage; Deck y auth vía backend. */
 
-import { CONFIG }    from './config.js';
-import { STATE }     from './state.js';
-import { save }      from './storage.js';
-import { generateId } from './utils.js';
-import { getToken, logout }  from './auth.js';
+import { CONFIG }    from '../core/config.js';
+import { STATE }     from '../core/state.js';
+import { save }      from '../core/storage.js';
+import { generateId } from '../shared/utils.js';
+import { getToken, logout }  from '../auth/auth.js';
 
 async function apiFetch(path, options = {}) {
     const token = getToken();
@@ -46,10 +46,8 @@ export async function saveTime(taskId, timeSpent, subtaskId = null, feedback = n
     if (CONFIG.BACKEND_URL) {
         await apiFetch(`/tareas/${taskId}/time`, {
             method: 'POST',
-            // Backend: POST /api/proyectos/tareas/{task_id}/time
-            // Espera `tiempoInvertido` y `subtaskId` (ver record_time_by_path).
             body: JSON.stringify({
-                tareaId: taskId,           // alineado al modelo TimeRecord (alias: tareaId)
+                tareaId: taskId,
                 tiempoInvertido: timeSpent,
                 subtaskId,
                 feedback,
@@ -131,7 +129,6 @@ export async function createTask(data) {
     };
 
     if (CONFIG.BACKEND_URL) {
-        // Backend expects TaskCreate shape (no id/progress/timeSpent/observations wrapper).
         const payload = {
             title:        newTask.title,
             description:  newTask.description ?? "",
@@ -149,8 +146,6 @@ export async function createTask(data) {
             body: JSON.stringify(payload),
         });
 
-        // Backend returns: { success: True, task: <Task> }
-        // Fallback al objeto local si el backend no devuelve el task.
         const task = saved?.task ?? (saved?.id ? saved : newTask);
         STATE.tasks.push(task);
         save();

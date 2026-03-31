@@ -1,29 +1,39 @@
 /** Punto de entrada: OAuth, carga de datos, event delegation central. */
 
-import { STATE }            from './state.js';
-import { load }             from './storage.js';
-import { fetchTasks }       from './api.js';
-import { renderBoard }      from './render.js';
-import { setupDragAndDrop } from './dragDrop.js';
-import { initAuth }         from './auth.js';
-import { CONFIG }           from './config.js';
+import { STATE }            from './core/state.js';
+import { load }             from './core/storage.js';
+import { fetchTasks }       from './api/api.js';
+import { renderBoard }      from './board/render.js';
+import { setupDragAndDrop } from './board/dragDrop.js';
+import { initAuth }         from './auth/auth.js';
+import { CONFIG }           from './core/config.js';
+import { closeModal }       from './shared/modal.js';
 
 import {
-    openNewTaskModal, openEditTaskModal, openImportDeckModal,
-    openTaskDetail, closeModal, addSubtaskInput, submitNewTask,
-    toggleSubtask, toggleDeckSelection, importSelectedDeckCards,
-    selectDeckBoard, confirmDeleteTask, openTimeEdit, cancelTimeEdit, saveTimeEdit,
-    confirmCompletion,
-} from './modals.js';
+    openNewTaskModal, openEditTaskModal,
+    addSubtaskInput, submitNewTask, confirmDeleteTask,
+} from './tasks/taskForm.js';
+
+import {
+    openTaskDetail, toggleSubtask,
+    openTimeEdit, cancelTimeEdit, saveTimeEdit,
+} from './tasks/taskDetail.js';
+
+import {
+    openImportDeckModal, selectDeckBoard,
+    toggleDeckSelection, importSelectedDeckCards,
+} from './deck/deckImport.js';
+
+import { confirmCompletion } from './timer/completionModal.js';
 
 import {
     startTimer, pauseTimer, stopTimer, cancelPause, confirmPause,
     closeTimerNotif, timerNotifNo, closeTimerAction, timerActionFinalize, timerActionStop,
     cancelCompletion,
-} from './timer.js';
+} from './timer/timer.js';
 
 // ---------------------------------------------------------------------------
-// Funciones locales (no necesitan ser globales)
+// Funciones locales
 // ---------------------------------------------------------------------------
 
 function setSubtaskSelection(taskId, subtaskId) {
@@ -35,7 +45,6 @@ function setSubtaskSelection(taskId, subtaskId) {
 // ---------------------------------------------------------------------------
 
 async function handleClick(e) {
-    // Cierra dropdowns abiertos si el click es fuera del menú
     if (!e.target.closest('.task-menu-wrapper')) {
         document.querySelectorAll('.task-dropdown.open').forEach(d => d.classList.remove('open'));
     }
@@ -46,7 +55,6 @@ async function handleClick(e) {
     const { action, taskId, subtaskId, modalId, type, elapsed, deckId } = el.dataset;
 
     switch (action) {
-        // Menú de tarjeta (dropdown)
         case 'toggle-task-menu': {
             const dropdown = document.getElementById(`task-dropdown-${taskId}`);
             const isOpen = dropdown?.classList.contains('open');
@@ -140,7 +148,6 @@ async function init() {
     renderBoard();
     setupDragAndDrop();
 
-    // Event delegation — un único listener para toda la app
     document.addEventListener('click',  handleClick);
     document.addEventListener('change', handleChange);
 
