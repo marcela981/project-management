@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { fetchMyMetrics, fetchUserSkills } from '../dashApi.js';
-import { USE_MOCK, MOCK_MY_METRICS, MOCK_MY_SKILLS } from '../mockData.js';
 import { useDateRange } from '../hooks/useDateRange.js';
 import PeriodSelector from './PeriodSelector.jsx';
 import KpiCard from './KpiCard.jsx';
@@ -55,13 +54,6 @@ export default function MyMetricsView({ user }) {
     const [error, setError]     = useState(null);
 
     const load = useCallback((start, end) => {
-        if (USE_MOCK) {
-            setData(MOCK_MY_METRICS);
-            setSkills(MOCK_MY_SKILLS);
-            setLoading(false);
-            return;
-        }
-
         setLoading(true);
         setError(null);
 

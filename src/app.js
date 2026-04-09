@@ -9,7 +9,6 @@ import { initAuth }         from './auth/auth.js';
 import { CONFIG }           from './core/config.js';
 import { closeModal }       from './shared/modal.js';
 import { fetchTeams }       from './dashboard/dashApi.js';
-import { USE_MOCK }         from './dashboard/mockData.js';
 import { renderMyMetrics }  from './dashboard/myMetrics.js';
 import { renderTeamDashboard } from './dashboard/teamDashboard.js';
 import { renderSkills, submitEndorse } from './skills/skills.js';
@@ -180,18 +179,11 @@ async function init() {
     const user = await initAuth();
 
     if (!user) {
-        if (USE_MOCK) {
-            // Mock mode: use a fake user so all views work without auth
-            _currentUser = { id: 'u1', displayname: 'Ana Silva', initials: 'AS', role: 'leader', teamId: 'tech' };
-            document.getElementById('userAvatar').textContent = 'AS';
-            document.getElementById('userName').textContent   = 'Ana Silva (mock)';
-        } else {
-            if (!CONFIG.NEXTCLOUD_OAUTH_CLIENT_ID) {
-                document.getElementById('userAvatar').textContent = '?';
-                document.getElementById('userName').textContent   = 'User';
-            }
-            if (CONFIG.NEXTCLOUD_OAUTH_CLIENT_ID) return;
+        if (!CONFIG.NEXTCLOUD_OAUTH_CLIENT_ID) {
+            document.getElementById('userAvatar').textContent = '?';
+            document.getElementById('userName').textContent   = 'User';
         }
+        if (CONFIG.NEXTCLOUD_OAUTH_CLIENT_ID) return;
     } else {
         document.getElementById('userAvatar').textContent = user.initials   || '?';
         document.getElementById('userName').textContent   = user.displayname || user.id || 'User';
@@ -212,9 +204,7 @@ async function init() {
         );
     }
 
-    if (USE_MOCK) {
-        isTechTeam = true; // show all tabs in mock mode
-    } else if (_currentUser?.teamId != null) {
+    if (_currentUser?.teamId != null) {
         promises.push(
             fetchTeams().then(teams => {
                 const myTeam = (teams ?? []).find(t => t.id === _currentUser.teamId);

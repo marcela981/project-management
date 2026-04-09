@@ -5,15 +5,9 @@ import {
     fetchSkillsComparison, fetchCompare, endorseSkill,
     evaluateUser, createSkill,
 } from '../dashboard/dashApi.js';
-import {
-    USE_MOCK, MOCK_SKILLS, MOCK_MY_SKILLS,
-    MOCK_RADAR, MOCK_SKILLS_COMPARISON, MOCK_MEMBERS,
-} from '../dashboard/mockData.js';
-
 let _currentUser      = null;
 let _currentContainer = null;       // reference for re-renders
 let _pendingEndorse   = null;
-let _mockExtraSkills  = [];         // skills added in this session (mock only)
 
 const SKILL_CATEGORIES = ['Frontend', 'Backend', 'DevOps', 'Soft', 'Diseño', 'Data', 'Gestión', 'Otra'];
 
@@ -56,7 +50,7 @@ export async function submitEndorse() {
     btn.disabled    = true;
     btn.innerHTML   = '<i class="fas fa-spinner fa-spin"></i> Enviando…';
     try {
-        if (!USE_MOCK) await endorseSkill(_pendingEndorse.userId, _pendingEndorse.skillId, score, comment);
+        await endorseSkill(_pendingEndorse.userId, _pendingEndorse.skillId, score, comment);
         modal.classList.remove('active');
         _pendingEndorse = null;
     } catch (err) {
@@ -73,11 +67,9 @@ async function _loadMySkills(container) {
     const content = container.querySelector('#skillsContent');
     content.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Cargando skills…</div>';
     try {
-        const [baseSkills, mySkills] = USE_MOCK
-            ? [MOCK_SKILLS, MOCK_MY_SKILLS]
-            : await Promise.all([fetchSkills(), fetchUserSkills(_currentUser.id)]);
+        const [baseSkills, mySkills] = await Promise.all([fetchSkills(), fetchUserSkills(_currentUser.id)]);
 
-        const allSkills = USE_MOCK ? [...baseSkills, ..._mockExtraSkills] : baseSkills;
+        const allSkills = baseSkills ?? [];
 
         if (!allSkills?.length) {
             content.innerHTML = '<div class="empty-state">No hay skills configuradas aún.</div>';
@@ -88,11 +80,7 @@ async function _loadMySkills(container) {
         (mySkills ?? []).forEach(s => { myMap[s.skillId ?? s.id] = s; });
 
         const isLeader    = _currentUser?.role === 'leader' || _currentUser?.role === 'admin';
-        const teamMembers = isLeader
-            ? (USE_MOCK
-                ? MOCK_MEMBERS.filter(m => m.userId !== _currentUser?.id)
-                : [])
-            : [];
+        const teamMembers = [];
 
         content.innerHTML = `
             ${_htmlSelfEval(allSkills, myMap)}
@@ -219,7 +207,7 @@ function _bindSelfEval(content, allSkills) {
         btn.disabled  = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando…';
         try {
-            if (!USE_MOCK) await updateMySkills(skills);
+            await updateMySkills(skills);
             btn.innerHTML = '<i class="fas fa-check"></i> Guardado';
             setTimeout(() => { btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Guardar cambios'; }, 2000);
         } catch (err) {
@@ -251,11 +239,7 @@ function _bindSelfEval(content, allSkills) {
         btn.disabled  = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         try {
-            if (USE_MOCK) {
-                _mockExtraSkills.push({ id: 'mock_' + Date.now(), name, category: category || undefined });
-            } else {
-                await createSkill(name, category || null);
-            }
+            await createSkill(name, category || null);
             await _loadMySkills(_currentContainer);
         } catch (err) {
             btn.disabled  = false;
@@ -279,12 +263,8 @@ function _bindEvalOther(content, allSkills) {
 
         try {
             let memberMap = {};
-            if (USE_MOCK) {
-                _getMockMemberSkills(userId, allSkills).forEach(s => { memberMap[s.skillId] = s; });
-            } else {
-                const raw = await fetchUserSkills(userId) ?? [];
-                raw.forEach(s => { memberMap[s.skillId ?? s.id] = s; });
-            }
+            const raw = await fetchUserSkills(userId) ?? [];
+            raw.forEach(s => { memberMap[s.skillId ?? s.id] = s; });
 
             evalContent.innerHTML = `
                 <div class="eval-member-label">
@@ -311,7 +291,7 @@ function _bindEvalOther(content, allSkills) {
                 btn.disabled  = true;
                 btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Guardando…';
                 try {
-                    if (!USE_MOCK) await evaluateUser(userId, skills);
+                    await evaluateUser(userId, skills);
                     btn.innerHTML = '<i class="fas fa-check"></i> Evaluación guardada';
                     setTimeout(() => {
                         btn.disabled  = false;
@@ -330,24 +310,13 @@ function _bindEvalOther(content, allSkills) {
     });
 }
 
-function _getMockMemberSkills(userId, allSkills) {
-    const member = MOCK_SKILLS_COMPARISON.members.find(m => m.userId === userId);
-    return allSkills.map(skill => ({
-        skillId:      skill.id,
-        score:        member?.skills?.[skill.id]?.score ?? 5,
-        endorsements: [],
-    }));
-}
-
 // ─── "Comparativa" tab ────────────────────────────────────────────────────────
 
 async function _loadComparison(container) {
     const content = container.querySelector('#skillsContent');
     content.innerHTML = '<div class="loading-state"><i class="fas fa-spinner fa-spin"></i> Cargando comparativa…</div>';
     try {
-        const [comparison, radarData] = USE_MOCK
-            ? [MOCK_SKILLS_COMPARISON, MOCK_RADAR]
-            : await Promise.all([fetchSkillsComparison(), fetchCompare()]);
+        const [comparison, radarData] = await Promise.all([fetchSkillsComparison(), fetchCompare()]);
 
         if (!comparison && !radarData) {
             content.innerHTML = '<div class="empty-state">Sin datos de comparativa.</div>';

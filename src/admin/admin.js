@@ -5,26 +5,6 @@ import {
     fetchTeams, createTeam, updateTeam, deleteTeam,
     addTeamMember, removeTeamMember, setUserRole,
 } from '../dashboard/dashApi.js';
-import { USE_MOCK, MOCK_MEMBERS, MOCK_TEAMS } from '../dashboard/mockData.js';
-
-// Shapes mock members/teams to match what the backend returns
-const _mockAdminUsers = () => MOCK_MEMBERS.map(m => ({
-    id:          m.userId,
-    ncUserId:    m.userId,
-    displayName: m.displayname,
-    displayname: m.displayname,
-    jobTitle:    m.jobTitle,
-    teamId:      m.teamId,
-    role:        m.userId === 'u1' ? 'leader' : 'member',
-}));
-
-const _mockAdminTeams = () => MOCK_TEAMS.map(t => ({
-    id:          t.id,
-    name:        t.name,
-    isTechTeam:  t.id === 'tech',
-    memberCount: MOCK_MEMBERS.filter(m => m.teamId === t.id).length,
-}));
-
 let _user     = null;
 let _allTeams = [];
 
@@ -81,9 +61,7 @@ async function _loadMyTeam(container) {
     const viewerNcId = _user?.id;
 
     try {
-        const [allUsers, allTeams] = USE_MOCK
-            ? [_mockAdminUsers(), _mockAdminTeams()]
-            : await Promise.all([fetchAdminUsers().catch(() => []), fetchTeams().catch(() => [])]);
+        const [allUsers, allTeams] = await Promise.all([fetchAdminUsers().catch(() => []), fetchTeams().catch(() => [])]);
 
         _allTeams = allTeams ?? [];
 

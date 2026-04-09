@@ -1,10 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useDateRange } from '../hooks/useDateRange.js';
-import {
-    USE_MOCK, MOCK_TEAMS, MOCK_MEMBERS, MOCK_METRICS,
-    MOCK_TREND_DEADLINE, MOCK_TREND_MEMBER_DEADLINE,
-    MOCK_STATUS_DATA, MOCK_CAPACITY,
-} from '../mockData.js';
+import { fetchTeams, fetchAdminUsers } from '../dashApi.js';
 import PeriodSelector from './PeriodSelector.jsx';
 import KpiCard from './KpiCard.jsx';
 import { AreaChart, DoughnutChart } from './Charts.jsx';
@@ -50,10 +46,19 @@ export default function TeamDashboardView({ user }) {
 
     const [selectedTeam, setSelectedTeam]     = useState(constraints.defaultTeam);
     const [selectedMember, setSelectedMember] = useState(constraints.defaultMember);
+    const [teams, setTeams]                   = useState([]);
+    const [allMembers, setAllMembers]         = useState([]);
 
-    // --- Data sources (swap for API when backend is ready) ---
-    const teams      = USE_MOCK ? MOCK_TEAMS : [];
-    const allMembers = USE_MOCK ? MOCK_MEMBERS : [];
+    useEffect(() => {
+        fetchTeams().then(data => setTeams(data ?? [])).catch(() => {});
+        fetchAdminUsers().then(data => setAllMembers(
+            (data ?? []).map(u => ({
+                ...u,
+                userId:      u.id ?? u.ncUserId,
+                displayname: u.displayName || u.displayname || u.id,
+            }))
+        )).catch(() => {});
+    }, []);
 
     const visibleMembers = useMemo(() => {
         let list = allMembers;
@@ -64,7 +69,7 @@ export default function TeamDashboardView({ user }) {
     const filteredMembers = useMemo(() => {
         let list = visibleMembers;
         if (selectedMember !== 'all') list = list.filter(m => m.userId === selectedMember);
-        return list.map(m => ({ ...m, ...(MOCK_METRICS[m.userId] ?? {}) }));
+        return list;
     }, [visibleMembers, selectedMember]);
 
     // --- KPIs ---
@@ -80,60 +85,9 @@ export default function TeamDashboardView({ user }) {
         return { total, avgOnTime, totalHrs, avgEff };
     }, [filteredMembers]);
 
-    // --- Team area chart: filtered by selectedTeam only ---
-    const teamTrendChart = useMemo(() => {
-        const teamNames = selectedTeam === 'all'
-            ? teams.map(t => t.name)
-            : [teams.find(t => t.id === selectedTeam)?.name].filter(Boolean);
-
-        return {
-            labels: MOCK_TREND_DEADLINE.map(d => d.month),
-            datasets: teamNames.map(name => ({
-                label: name,
-                data: MOCK_TREND_DEADLINE.map(d => d[name] ?? 0),
-            })),
-        };
-    }, [selectedTeam, teams]);
-
-    // --- Individual area chart: filtered by both selectedTeam + selectedMember ---
-    const individualTrendChart = useMemo(() => {
-        const months = MOCK_TREND_MEMBER_DEADLINE.months;
-
-        if (selectedMember !== 'all') {
-            const member = visibleMembers.find(m => m.userId === selectedMember);
-            if (!member) return { labels: months, datasets: [] };
-            return {
-                labels: months,
-                datasets: [{
-                    label: member.displayname,
-                    data: MOCK_TREND_MEMBER_DEADLINE[member.userId] ?? [],
-                }],
-            };
-        }
-
-        // Aggregate: average of all visible members
-        const memberIds = visibleMembers.map(m => m.userId);
-        if (memberIds.length === 0) return { labels: months, datasets: [] };
-
-        const avgData = months.map((_, idx) => {
-            const values = memberIds
-                .map(uid => MOCK_TREND_MEMBER_DEADLINE[uid]?.[idx])
-                .filter(v => v != null);
-            return values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
-        });
-
-        const label = selectedTeam === 'all'
-            ? 'Todos los miembros'
-            : (teams.find(t => t.id === selectedTeam)?.name ?? 'Equipo');
-
-        return { labels: months, datasets: [{ label, data: avgData }] };
-    }, [selectedMember, visibleMembers, selectedTeam, teams]);
-
-    // --- Status distribution ---
-    const statusChart = useMemo(() => ({
-        labels: Object.keys(MOCK_STATUS_DATA),
-        data:   Object.values(MOCK_STATUS_DATA),
-    }), []);
+    const teamTrendChart      = useMemo(() => ({ labels: [], datasets: [] }), []);
+    const individualTrendChart = useMemo(() => ({ labels: [], datasets: [] }), []);
+    const statusChart          = useMemo(() => ({ labels: [], data: [] }), []);
 
     // --- Handlers ---
     const handleTeamChange = (val) => {
@@ -275,7 +229,7 @@ export default function TeamDashboardView({ user }) {
                         members={selectedMember !== 'all'
                             ? visibleMembers.filter(m => m.userId === selectedMember)
                             : visibleMembers}
-                        capacity={MOCK_CAPACITY}
+                        capacity={{}}
                     />
                 </div>
             </div>
