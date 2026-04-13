@@ -46,7 +46,13 @@
 /* ─── App Views ───────────────────────────────────────────────────────────── */
 
 .app-view { display: none; }
-.app-view.active { display: block; }
+.app-view.active {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
 
 /* ─── View Header ─────────────────────────────────────────────────────────── */
 
