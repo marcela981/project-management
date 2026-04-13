@@ -47,7 +47,9 @@ export function createTaskCard(task) {
     const totalCount      = task.subtasks.length;
     const progressPercent = task.progress
         || (totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0);
-    const isComplete    = progressPercent === 100;
+    const isComplete         = progressPercent === 100;
+    const showCompletedBadge = task.column === 'completed' ||
+        (task.type === 'activity' && progressPercent === 100);
     const overdueClass  = isOverdue(task.deadline) && !isComplete ? 'overdue' : '';
     const completeClass = isComplete ? 'complete' : '';
 
@@ -80,7 +82,7 @@ export function createTaskCard(task) {
 
     card.innerHTML = `
         <div class="task-priority ${task.priority}"></div>
-        ${isComplete ? `
+        ${showCompletedBadge ? `
         <div class="task-completed-badge">
             <i class="fas fa-check-circle"></i> Completada
         </div>` : ''}
