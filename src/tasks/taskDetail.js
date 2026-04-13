@@ -123,7 +123,7 @@ export async function toggleSubtask(taskId, subtaskId) {
     );
 
     save();
-    await updateTask(taskId, { subtasks: task.subtasks });
+    await updateTask(taskId, { subtasks: task.subtasks, progress: task.progress });
     openTaskDetail(taskId);
     renderBoard();
 }

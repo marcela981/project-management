@@ -118,6 +118,19 @@ export async function submitNewTask() {
         const taskId = STATE.editingTaskId;
         const existingTask = STATE.tasks.find(t => t.id === taskId);
 
+        // Preservar estado completed/timeSpent de subtareas existentes al hacer match por texto
+        const existingByText = new Map(
+            (existingTask?.subtasks ?? []).map(s => [s.text.trim().toLowerCase(), s])
+        );
+        const mergedSubtasks = subtasks.map(s => {
+            const prev = existingByText.get(s.text.trim().toLowerCase());
+            return prev ? { ...prev, text: s.text } : s;
+        });
+        const completedCount = mergedSubtasks.filter(s => s.completed).length;
+        const recalcProgress = mergedSubtasks.length > 0
+            ? Math.round((completedCount / mergedSubtasks.length) * 100)
+            : (existingTask?.progress ?? 0);
+
         const data = {
             title:        name,
             description:  document.getElementById('inputDescription').value.trim(),
@@ -129,7 +142,8 @@ export async function submitNewTask() {
             activityType: STATE.currentTaskType === 'activity'
                 ? document.getElementById('inputActivityType').value
                 : null,
-            subtasks,
+            subtasks:  mergedSubtasks,
+            progress:  recalcProgress,
         };
 
         try {
