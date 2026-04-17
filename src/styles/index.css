@@ -14,3 +14,7 @@
 @import './components/timer.css';
 @import './components/deck.css';
 @import './components/dashboard.css';
+
+/* Features */
+@import '../settings/settings.css';
+@import '../weekly/weekly.css';

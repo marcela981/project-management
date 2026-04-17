@@ -36,6 +36,9 @@
             <div class="user-avatar" id="userAvatar">?</div>
             <span class="user-name" id="userName">User</span>
           </div>
+          <button class="btn-config" data-action="open-settings" title="Configuración">
+            <i class="fas fa-cog"></i>
+          </button>
         </div>
       </div>
     </header>
@@ -60,6 +63,9 @@
         -->
         <button class="nav-tab nav-leader" data-view="admin" style="display:none">
           <i class="fas fa-cog"></i><span> Admin</span>
+        </button>
+        <button class="nav-tab" data-view="weekly">
+          <i class="fas fa-calendar-week"></i><span> Weekly</span>
         </button>
       </div>
     </nav>
@@ -152,6 +158,9 @@
 
     <!-- View: Admin -->
     <div id="view-admin" class="app-view"></div>
+
+    <!-- View: Weekly Tracker -->
+    <div id="view-weekly" class="app-view"></div>
 
     <div class="modal-overlay" id="modalNewTask">
       <div class="modal">
@@ -308,6 +317,60 @@
             <i class="fas fa-star"></i> Endorsar
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Modal: Agregar bloque weekly -->
+    <div class="modal-overlay" id="modalWeeklyBlock">
+      <div class="modal" style="max-width:480px">
+        <div class="modal-header">
+          <h2 class="modal-title">Agregar bloque</h2>
+          <button class="modal-close" data-action="close-modal" data-modal-id="modalWeeklyBlock" aria-label="Cerrar">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div class="modal-body" id="modalWeeklyBlockBody"></div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" data-action="close-modal" data-modal-id="modalWeeklyBlock">Cancelar</button>
+          <button class="btn btn-primary" data-action="weekly-submit-block">
+            <i class="fas fa-plus"></i> Agregar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Settings panel -->
+    <div class="settings-overlay" id="settingsOverlay" data-action="close-settings"></div>
+    <div class="settings-panel" id="settingsPanel">
+      <div class="settings-header">
+        <h2><i class="fas fa-cog" style="margin-right:.5rem;color:var(--color-primary)"></i>Configuración</h2>
+        <button class="modal-close" data-action="close-settings" aria-label="Cerrar">
+          <i class="fas fa-times"></i>
+        </button>
+      </div>
+      <div class="settings-body">
+        <div class="settings-section-title">Preferencias de semana</div>
+        <div class="form-group">
+          <label class="form-label" for="settingWeekStart">Día de inicio</label>
+          <select id="settingWeekStart" class="form-select">
+            <option value="0">Domingo</option>
+            <option value="1" selected>Lunes</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="settingWeekEnd">Día de fin</label>
+          <select id="settingWeekEnd" class="form-select">
+            <option value="4">Jueves</option>
+            <option value="5" selected>Viernes</option>
+            <option value="0">Domingo</option>
+          </select>
+        </div>
+      </div>
+      <div class="settings-footer">
+        <button class="btn btn-secondary" data-action="close-settings">Cerrar</button>
+        <button class="btn btn-primary" data-action="save-settings">
+          <i class="fas fa-save"></i> Guardar
+        </button>
       </div>
     </div>
 

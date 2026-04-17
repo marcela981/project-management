@@ -30,6 +30,9 @@ import {
 } from './deck/deckImport.js';
 
 import { confirmCompletion } from './timer/completionModal.js';
+import { renderWeekly, handleWeeklyClick } from './weekly/weekly.js';
+import { submitBlock, handleWeeklyModalEvent } from './weekly/weekly-modal.js';
+import { openSettings, closeSettings, saveSettings } from './settings/settings.js';
 
 import {
     startTimer, pauseTimer, stopTimer, cancelPause, confirmPause,
@@ -65,6 +68,9 @@ function navigateTo(view) {
             break;
         case 'admin':
             if (_currentUser) renderAdmin(container, _currentUser);
+            break;
+        case 'weekly':
+            renderWeekly(container);
             break;
     }
 }
@@ -160,8 +166,22 @@ async function handleClick(e) {
         // Skills – endorse
         case 'submit-endorse':    await submitEndorse(); break;
 
+        // Configuración
+        case 'open-settings':     openSettings(); break;
+        case 'close-settings':    closeSettings(); break;
+        case 'save-settings':     saveSettings(); break;
+
+        // Weekly tracker
+        case 'weekly-submit-block': submitBlock(); break;
+
         // Modales
         case 'close-modal':       closeModal(modalId); break;
+
+        default:
+            if (action?.startsWith('weekly-')) {
+                if (!handleWeeklyModalEvent(action, el)) handleWeeklyClick(action, el);
+            }
+            break;
     }
 }
 
@@ -227,6 +247,11 @@ async function init() {
     setupDragAndDrop();
 
     if (_currentUser) setupNav(_currentUser, isTechTeam);
+
+    // Weekly tab is always available (no auth required)
+    document.querySelectorAll('.nav-tab[data-view="weekly"]').forEach(tab => {
+        tab.addEventListener('click', () => navigateTo('weekly'));
+    });
 
     document.addEventListener('click',  handleClick);
     document.addEventListener('change', handleChange);
