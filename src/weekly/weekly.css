@@ -7,15 +7,11 @@
 #view-weekly.app-view.active {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    height: calc(100vh - 115px); /* header (72px) + nav (43px) */
 }
 
 .weekly-view {
     display: flex;
     flex-direction: column;
-    height: 100%;
-    overflow: hidden;
     background: var(--color-background);
 }
 
@@ -29,6 +25,9 @@
     background: var(--color-surface);
     border-bottom: 1px solid var(--color-border);
     flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 20;
 }
 
 .weekly-indicator-card {
@@ -186,9 +185,8 @@
 /* ── Scrollable grid ────────────────────────────────────────────────────── */
 
 .weekly-scroll {
-    flex: 1;
-    overflow: auto;
     position: relative;
+    overflow-x: auto;
 }
 
 .weekly-grid {
@@ -205,6 +203,16 @@
     z-index: 10;
     background: var(--color-surface);
     border-right: 1px solid var(--color-border);
+}
+
+.weekly-time-axis-spacer {
+    height: var(--weekly-col-header-height, 66px);
+    position: sticky;
+    top: var(--weekly-indicators-height, 90px);
+    z-index: 8;
+    background: var(--color-surface);
+    border-bottom: 2px solid var(--color-border);
+    box-sizing: border-box;
 }
 
 .weekly-hour-label {
@@ -243,7 +251,7 @@
     border-bottom: 2px solid var(--color-border);
     background: var(--color-surface);
     position: sticky;
-    top: 0;
+    top: var(--weekly-indicators-height, 90px);
     z-index: 5;
 }
 .weekly-col-header.today {
@@ -288,7 +296,7 @@
 .weekly-col-body {
     position: relative;
     flex: 1;
-    min-height: 1080px; /* 18 hours × 60px */
+    min-height: 1020px; /* 17h × 60px (6am–11pm) */
     background: var(--color-surface);
 }
 .weekly-col-body.no-blocks {
@@ -341,9 +349,6 @@
     justify-content: center;
     border-top: 1px solid var(--color-border);
     background: var(--color-surface);
-    position: sticky;
-    bottom: 0;
-    z-index: 4;
 }
 
 .weekly-add-btn {

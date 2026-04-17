@@ -87,6 +87,15 @@ function _render() {
                 </div>
             </div>
         </div>`;
+
+    requestAnimationFrame(() => {
+        const view       = _container.querySelector('.weekly-view');
+        const indicators = _container.querySelector('.weekly-indicators');
+        const colHeader  = _container.querySelector('.weekly-col-header');
+        if (!view) return;
+        if (indicators) view.style.setProperty('--weekly-indicators-height', indicators.offsetHeight + 'px');
+        if (colHeader)  view.style.setProperty('--weekly-col-header-height', colHeader.offsetHeight + 'px');
+    });
 }
 
 // ── Indicators ──────────────────────────────────────────────────────────────
@@ -194,7 +203,7 @@ function _renderTimeAxis() {
         const label = h === 0 ? '12am' : h < 12 ? `${h}am` : h === 12 ? '12pm' : `${h - 12}pm`;
         labels.push(`<div class="weekly-hour-label">${label}</div>`);
     }
-    return `<div class="weekly-time-axis">${labels.join('')}</div>`;
+    return `<div class="weekly-time-axis"><div class="weekly-time-axis-spacer"></div>${labels.join('')}</div>`;
 }
 
 // ── Day column ───────────────────────────────────────────────────────────────
