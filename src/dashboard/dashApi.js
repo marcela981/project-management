@@ -34,6 +34,11 @@ export const fetchCompare = () =>
 export const fetchSkillsComparison = () =>
     apiFetch('/api/dashboard/skills-comparison');
 
+export const fetchDeliveryTrend = (params) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiFetch(`/api/dashboard/delivery-trend?${qs}`);
+};
+
 // --- Skills ---
 export const fetchSkills = () =>
     apiFetch('/api/skills');

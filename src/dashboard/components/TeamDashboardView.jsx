@@ -1,9 +1,9 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useDateRange } from '../hooks/useDateRange.js';
-import { fetchTeams, fetchTeamMetrics } from '../dashApi.js';
+import { fetchTeams, fetchTeamMetrics, fetchDeliveryTrend } from '../dashApi.js';
 import PeriodSelector from './PeriodSelector.jsx';
 import KpiCard from './KpiCard.jsx';
-import { LineChart, DoughnutChart } from './Charts.jsx';
+import { AreaChart, DoughnutChart } from './Charts.jsx';
 import CapacityHeatmap from './CapacityHeatmap.jsx';
 
 function initials(name) {
@@ -32,33 +32,42 @@ function resolveRoleConstraints(user) {
         return { defaultTeam: 'all', defaultMember: 'all', lockTeam: false, lockMember: false };
     }
     if (role === 'leader') {
-        // Leaders default to 'all' but are locked to their own team scope
         return { defaultTeam: 'all', defaultMember: 'all', lockTeam: false, lockMember: false };
     }
-    // Members only see their own team
     return { defaultTeam: user?.teamId ?? 'all', defaultMember: user?.id ?? 'all', lockTeam: true, lockMember: true };
 }
 
-/** Merges tasksByMonth arrays from multiple members, summing counts per month. */
-function mergeTasksByMonth(members) {
-    const map = {};
-    for (const m of members) {
-        for (const entry of (m.tasksByMonth ?? [])) {
-            map[entry.month] = (map[entry.month] ?? 0) + (entry.count ?? 0);
-        }
+/** Converts API trend response to AreaChart props, grouping excess series as "Otros (N)". */
+function toChartProps(trend) {
+    const labels = trend?.labels ?? [];
+    const series = trend?.series ?? [];
+    if (series.length === 0) return { labels, datasets: [] };
+
+    const visible = series.slice(0, 8);
+    const rest = series.slice(8);
+
+    const datasets = visible.map(s => ({ label: s.label, data: s.data }));
+
+    if (rest.length > 0) {
+        const otrosData = labels.map((_, i) => {
+            const vals = rest.map(s => s.data[i]).filter(v => v != null);
+            return vals.length > 0 ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100 : null;
+        });
+        datasets.push({ label: `Otros (${rest.length})`, data: otrosData });
     }
-    return Object.entries(map)
-        .sort(([a], [b]) => a.localeCompare(b))
-        .map(([month, count]) => ({ month, count }));
+
+    return { labels, datasets };
 }
 
-/** Converts a tasksByMonth array to { labels, datasets } for LineChart. */
-function toTrendChart(tasksByMonth, label) {
-    const sorted = [...(tasksByMonth ?? [])].sort((a, b) => a.month.localeCompare(b.month));
-    return {
-        labels:   sorted.map(e => e.month),
-        datasets: [{ label, data: sorted.map(e => e.count ?? 0) }],
-    };
+function TrendPlaceholder({ loading }) {
+    return (
+        <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--muted, #94a3b8)' }}>
+            {loading
+                ? <><i className="fas fa-spinner fa-spin" style={{ fontSize: '1.5rem', display: 'block', marginBottom: '0.5rem' }} />Cargando datos...</>
+                : <><i className="fas fa-chart-area" style={{ fontSize: '1.5rem', display: 'block', marginBottom: '0.5rem' }} />Sin datos de entrega en el período seleccionado</>
+            }
+        </div>
+    );
 }
 
 export default function TeamDashboardView({ user }) {
@@ -71,19 +80,59 @@ export default function TeamDashboardView({ user }) {
     const [teamData, setTeamData]             = useState(null);
     const [metricsLoading, setMetricsLoading] = useState(false);
 
+    const [trendTeams, setTrendTeams]     = useState({ labels: [], series: [] });
+    const [trendMembers, setTrendMembers] = useState({ labels: [], series: [] });
+    const [trendLoading, setTrendLoading] = useState(false);
+
+    const [rangeError, setRangeError] = useState(null);
+    // activeRange is the "confirmed" range that drives all fetches.
+    // For non-custom periods it stays in sync automatically; for custom, only after OK.
+    const [activeRange, setActiveRange] = useState({ start: dr.range.start, end: dr.range.end });
+
     useEffect(() => {
         fetchTeams().then(data => setTeams(data ?? [])).catch(() => {});
     }, []);
 
-    // Fetch real metrics when team selection or date range changes.
-    // When 'all' is selected, fetch every team in parallel and combine memberMetrics.
+    // Sync activeRange immediately for non-custom periods
     useEffect(() => {
+        if (dr.period !== 'custom') {
+            setActiveRange({ start: dr.range.start, end: dr.range.end });
+        }
+    }, [dr.period, dr.range.start, dr.range.end]);
+
+    const handlePeriodChange = (p) => {
+        dr.setPeriod(p);
+        if (p !== 'custom') setRangeError(null);
+    };
+
+    const handleApplyCustom = () => {
+        const { customStart, customEnd } = dr;
+        if (!customStart || !customEnd) {
+            setRangeError('Selecciona ambas fechas.');
+            return;
+        }
+        const diff = (new Date(customEnd) - new Date(customStart)) / 86400000;
+        if (diff < 0) {
+            setRangeError('La fecha de inicio debe ser anterior a la fecha fin.');
+            return;
+        }
+        if (diff > 365) {
+            setRangeError('El rango máximo es 365 días.');
+            return;
+        }
+        setRangeError(null);
+        setActiveRange({ start: customStart, end: customEnd });
+    };
+
+    // Fetch team metrics when selection or active range changes
+    useEffect(() => {
+        if (!activeRange.start || !activeRange.end) return;
         if (selectedTeam === 'all') {
-            if (!teams.length) return; // wait for teams list to arrive
+            if (!teams.length) return;
             setMetricsLoading(true);
             Promise.all(
                 teams.map(t =>
-                    fetchTeamMetrics(t.id, dr.range.start, dr.range.end).catch(() => null)
+                    fetchTeamMetrics(t.id, activeRange.start, activeRange.end).catch(() => null)
                 )
             )
                 .then(results => {
@@ -95,21 +144,19 @@ export default function TeamDashboardView({ user }) {
         }
 
         setMetricsLoading(true);
-        fetchTeamMetrics(selectedTeam, dr.range.start, dr.range.end)
+        fetchTeamMetrics(selectedTeam, activeRange.start, activeRange.end)
             .then(data => setTeamData(data ?? null))
             .catch(() => setTeamData(null))
             .finally(() => setMetricsLoading(false));
-    }, [selectedTeam, dr.range.start, dr.range.end, teams]);
+    }, [selectedTeam, activeRange.start, activeRange.end, teams]);
 
     const memberMetrics = teamData?.memberMetrics ?? [];
 
-    // Filter memberMetrics by selected member
     const filteredMetrics = useMemo(() => {
         if (selectedMember === 'all') return memberMetrics;
         return memberMetrics.filter(m => String(m.userId) === String(selectedMember));
     }, [memberMetrics, selectedMember]);
 
-    // KPIs — member case untouched; team case aggregated from memberMetrics[]
     const kpis = useMemo(() => {
         if (!teamData) return { total: 0, completionRate: 0, hoursWorked: 0, avgIel: 0 };
 
@@ -132,25 +179,10 @@ export default function TeamDashboardView({ user }) {
         };
     }, [teamData, memberMetrics, filteredMetrics, selectedMember]);
 
-    // 'all' with loaded teams is also a valid state that shows real data
     const hasData = !metricsLoading && teamData !== null;
-
-    // Trend charts built from tasksByMonth
-    const teamTrendChart = useMemo(() => {
-        if (!memberMetrics.length) return { labels: [], datasets: [] };
-        return toTrendChart(mergeTasksByMonth(memberMetrics), 'Tareas completadas');
-    }, [memberMetrics]);
-
-    const individualTrendChart = useMemo(() => {
-        if (selectedMember !== 'all' && filteredMetrics.length > 0) {
-            return toTrendChart(filteredMetrics[0].tasksByMonth, filteredMetrics[0].displayName);
-        }
-        return teamTrendChart;
-    }, [selectedMember, filteredMetrics, teamTrendChart]);
 
     const statusChart = useMemo(() => ({ labels: [], data: [] }), []);
 
-    // Build capacity heatmap data from deepWorkByDay: { userId: { 'Lun': hours, ... } }
     const capacity = useMemo(() => {
         const DAY_MAP = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie' };
         const result = {};
@@ -158,7 +190,7 @@ export default function TeamDashboardView({ user }) {
             const accum = {};
             for (const [dateStr, seconds] of Object.entries(m.deepWorkByDay ?? {})) {
                 const dayName = DAY_MAP[new Date(`${dateStr}T12:00:00`).getDay()];
-                if (!dayName) continue; // skip weekends
+                if (!dayName) continue;
                 accum[dayName] = (accum[dayName] ?? 0) + seconds;
             }
             result[m.userId] = Object.fromEntries(
@@ -167,6 +199,39 @@ export default function TeamDashboardView({ user }) {
         }
         return result;
     }, [memberMetrics]);
+
+    // Chart B: teams by default; drill-down to members when a team or member is selected
+    useEffect(() => {
+        if (!activeRange.start || !activeRange.end) return;
+        const scope = (selectedTeam !== 'all' || selectedMember !== 'all') ? 'members' : 'teams';
+        const params = { scope, start_date: activeRange.start, end_date: activeRange.end };
+        if (selectedTeam !== 'all') params.team_id = selectedTeam;
+        if (selectedMember !== 'all') params.user_id = selectedMember;
+
+        const id = setTimeout(() => {
+            setTrendLoading(true);
+            fetchDeliveryTrend(params)
+                .then(data => setTrendTeams(data ?? { labels: [], series: [] }))
+                .catch(() => setTrendTeams({ labels: [], series: [] }))
+                .finally(() => setTrendLoading(false));
+        }, 300);
+        return () => clearTimeout(id);
+    }, [selectedTeam, selectedMember, activeRange.start, activeRange.end]);
+
+    // Chart A: always individual (scope=members)
+    useEffect(() => {
+        if (!activeRange.start || !activeRange.end) return;
+        const params = { scope: 'members', start_date: activeRange.start, end_date: activeRange.end };
+        if (selectedTeam !== 'all') params.team_id = selectedTeam;
+        if (selectedMember !== 'all') params.user_id = selectedMember;
+
+        const id = setTimeout(() => {
+            fetchDeliveryTrend(params)
+                .then(data => setTrendMembers(data ?? { labels: [], series: [] }))
+                .catch(() => setTrendMembers({ labels: [], series: [] }));
+        }, 300);
+        return () => clearTimeout(id);
+    }, [selectedTeam, selectedMember, activeRange.start, activeRange.end]);
 
     const handleTeamChange = (val) => {
         if (constraints.lockTeam) return;
@@ -179,6 +244,9 @@ export default function TeamDashboardView({ user }) {
         setSelectedMember(val);
     };
 
+    const teamsChartProps   = toChartProps(trendTeams);
+    const membersChartProps = toChartProps(trendMembers);
+
     return (
         <>
             {/* Header + Period */}
@@ -188,14 +256,21 @@ export default function TeamDashboardView({ user }) {
                 </h2>
                 <PeriodSelector
                     period={dr.period}
-                    onPeriodChange={dr.setPeriod}
+                    onPeriodChange={handlePeriodChange}
                     customStart={dr.customStart}
                     onCustomStartChange={dr.setCustomStart}
                     customEnd={dr.customEnd}
                     onCustomEndChange={dr.setCustomEnd}
-                    showCustom={false}
+                    onApplyCustom={handleApplyCustom}
+                    showCustom={true}
                 />
             </div>
+            {rangeError && (
+                <p style={{ color: 'var(--danger, #ef4444)', fontSize: '0.85rem', margin: '0.25rem 0 0.5rem' }}>
+                    <i className="fas fa-exclamation-triangle" style={{ marginRight: '4px' }} />
+                    {rangeError}
+                </p>
+            )}
 
             {/* Filters */}
             <div className="filter-bar">
@@ -253,28 +328,34 @@ export default function TeamDashboardView({ user }) {
                 />
             </div>
 
-            {/* Row 2 – Area charts */}
+            {/* Row 2 – Delivery trend area charts */}
             <div className="charts-grid mx">
                 <div className="chart-card">
                     <h3 className="chart-title">
-                        <i className="fas fa-chart-line" /> Tendencia – Equipo
+                        <i className="fas fa-chart-area" /> Tendencia de Entrega – Individual
                     </h3>
                     <p className="text-muted text-sm" style={{ marginBottom: '0.5rem' }}>
-                        Tareas completadas por mes, sumando todos los miembros del equipo.
+                        Días promedio vs deadline por persona. Sobre 0 = entrega temprana; bajo 0 = tardía.
                     </p>
-                    <LineChart labels={teamTrendChart.labels} datasets={teamTrendChart.datasets} />
+                    {trendLoading || membersChartProps.datasets.length === 0
+                        ? <TrendPlaceholder loading={trendLoading} />
+                        : <AreaChart labels={membersChartProps.labels} datasets={membersChartProps.datasets} />
+                    }
                 </div>
 
                 <div className="chart-card">
                     <h3 className="chart-title">
-                        <i className="fas fa-chart-line" /> Tendencia – Individual
+                        <i className="fas fa-chart-area" /> Tendencia de Entrega – Equipos
                     </h3>
                     <p className="text-muted text-sm" style={{ marginBottom: '0.5rem' }}>
-                        {selectedMember !== 'all'
-                            ? `Tareas completadas por mes — ${filteredMetrics[0]?.displayName ?? 'miembro seleccionado'}`
-                            : 'Total de tareas completadas por mes del equipo'}
+                        {selectedTeam !== 'all' || selectedMember !== 'all'
+                            ? 'Drill-down por persona del equipo seleccionado.'
+                            : 'Promedio de días vs deadline por equipo.'}
                     </p>
-                    <LineChart labels={individualTrendChart.labels} datasets={individualTrendChart.datasets} />
+                    {trendLoading || teamsChartProps.datasets.length === 0
+                        ? <TrendPlaceholder loading={trendLoading} />
+                        : <AreaChart labels={teamsChartProps.labels} datasets={teamsChartProps.datasets} />
+                    }
                 </div>
             </div>
 
