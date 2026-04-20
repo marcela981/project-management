@@ -213,10 +213,15 @@ export default function TeamDashboardView({ user }) {
 
     const capacity = useMemo(() => {
         const DAY_MAP = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie' };
+        const today    = new Date().toISOString().split('T')[0];
+        const capStart = activeRange.start;
+        const capEnd   = activeRange.end < today ? activeRange.end : today;
+
         const result = {};
         for (const m of memberMetrics) {
             const accum = {};
             for (const [dateStr, seconds] of Object.entries(m.deepWorkByDay ?? {})) {
+                if (dateStr < capStart || dateStr > capEnd) continue;
                 const dayName = DAY_MAP[new Date(`${dateStr}T12:00:00`).getDay()];
                 if (!dayName) continue;
                 accum[dayName] = (accum[dayName] ?? 0) + seconds;
@@ -226,7 +231,7 @@ export default function TeamDashboardView({ user }) {
             );
         }
         return result;
-    }, [memberMetrics]);
+    }, [memberMetrics, activeRange.start, activeRange.end]);
 
     // Chart B: teams by default; drill-down to members when a team or member is selected
     useEffect(() => {
