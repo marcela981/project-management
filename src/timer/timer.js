@@ -10,7 +10,8 @@ import { openCompletionModal } from './completionModal.js';
 
 
 // Umbrales de notificación: proyecto 3h, actividad 1h
-const NOTIFY_THRESHOLD = { project: 3 * 3600, activity: 1 * 3600 };
+const NOTIFY_THRESHOLD    = { project: 3 * 3600, activity: 1 * 3600 };
+const HEARTBEAT_INTERVAL  = 60; // seconds between silent backend syncs
 
 export function startTimer(taskId) {
     const task = STATE.tasks.find(t => t.id === taskId);
@@ -239,13 +240,30 @@ function _elapsed(type) {
     return Math.floor((Date.now() - STATE.timers[type].startTime) / 1000);
 }
 
-function _tick(taskId, type) {
+async function _tick(taskId, type) {
     const el    = document.getElementById(`timer-${taskId}`);
     const timer = STATE.timers[type];
     if (!el || !timer) return;
 
     const elapsed = _elapsed(type);
     el.textContent = formatTime(timer.accumulated + elapsed);
+
+    // Heartbeat: silently persist elapsed to backend every HEARTBEAT_INTERVAL seconds
+    if (elapsed >= HEARTBEAT_INTERVAL) {
+        const subtaskId = timer.subtaskId;
+        try {
+            await saveTime(taskId, elapsed, subtaskId, null);
+            // Only advance if timer is still active for this task
+            if (STATE.timers[type]?.taskId === taskId) {
+                STATE.timers[type].accumulated  += elapsed;
+                STATE.timers[type].startTime     = Date.now();
+                STATE.timers[type].nextNotifyAt -= elapsed; // keep threshold relative to total
+                saveTimers();
+            }
+        } catch {
+            // Offline or 401: leave startTime unchanged, retry next interval
+        }
+    }
 
     if (elapsed >= timer.nextNotifyAt) {
         timer.nextNotifyAt += NOTIFY_THRESHOLD[type];

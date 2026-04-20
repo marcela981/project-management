@@ -39,6 +39,7 @@ import {
     closeTimerNotif, timerNotifNo, closeTimerAction, timerActionFinalize, timerActionStop,
     cancelCompletion, restoreTimers,
 } from './timer/timer.js';
+import { flushActiveTimers } from './timer/timerFlush.js';
 
 // ---------------------------------------------------------------------------
 // Navegación entre vistas
@@ -252,6 +253,8 @@ async function init() {
     document.querySelectorAll('.nav-tab[data-view="weekly"]').forEach(tab => {
         tab.addEventListener('click', () => navigateTo('weekly'));
     });
+
+    window.addEventListener('beforeunload', flushActiveTimers);
 
     document.addEventListener('click',  handleClick);
     document.addEventListener('change', handleChange);

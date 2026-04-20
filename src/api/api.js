@@ -4,7 +4,8 @@ import { CONFIG }    from '../core/config.js';
 import { STATE }     from '../core/state.js';
 import { save }      from '../core/storage.js';
 import { generateId } from '../shared/utils.js';
-import { getToken, logout }  from '../auth/auth.js';
+import { getToken, logout }      from '../auth/auth.js';
+import { flushActiveTimers }     from '../timer/timerFlush.js';
 
 async function apiFetch(path, options = {}) {
     const token = getToken();
@@ -16,6 +17,7 @@ async function apiFetch(path, options = {}) {
         ...options,
     });
     if (response.status === 401) {
+        flushActiveTimers();
         logout();
         return;
     }
