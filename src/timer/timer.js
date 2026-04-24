@@ -7,6 +7,7 @@ import { renderBoard } from '../board/render.js';
 import { formatTime }  from '../shared/utils.js';
 import { closeModal }  from '../shared/modal.js';
 import { openCompletionModal } from './completionModal.js';
+import { emitTimeLogChanged } from '../core/events.js';
 
 
 // Umbrales de notificación: proyecto 3h, actividad 1h
@@ -81,6 +82,7 @@ export async function stopTimer(taskId) {
         }
 
         await saveTime(taskId, elapsed, subtaskId, {});
+        emitTimeLogChanged({ taskId, type: 'create' });
         if (sub) sub.completed = true;
         const done = task.subtasks.filter(s => s.completed).length;
         task.progress = Math.round((done / task.subtasks.length) * 100);
@@ -91,6 +93,7 @@ export async function stopTimer(taskId) {
             return;
         }
         await saveTime(taskId, elapsed, subtaskId, { progress: 100 });
+        emitTimeLogChanged({ taskId, type: 'create' });
         await completeTask(taskId);
     }
     renderBoard();
@@ -157,6 +160,7 @@ export async function confirmPause(taskId, elapsedTime) {
             observation: observation || null,
         });
     }
+    emitTimeLogChanged({ taskId, type: 'create' });
 
     if (task.type === 'project') {
         const helpVisible = document.getElementById('pauseHelpVisible')?.checked ?? false;

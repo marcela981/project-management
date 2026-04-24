@@ -3,6 +3,8 @@
 import { CONFIG } from '../core/config.js';
 
 const TOKEN_KEY       = 'nc_access_token';
+const REFRESH_KEY     = 'nc_refresh_token';
+const EXPIRES_AT_KEY  = 'nc_expires_at';
 const USER_KEY        = 'nc_user_info';
 const LAST_ACTIVE_KEY = 'nc_last_active';
 const INACTIVITY_MS   = 24 * 60 * 60 * 1000; // 24 horas
@@ -27,29 +29,83 @@ function _remove(key) {
     delete _mem[key];
 }
 
+function _clearAllAuthKeys() {
+    _remove(TOKEN_KEY);
+    _remove(REFRESH_KEY);
+    _remove(EXPIRES_AT_KEY);
+    _remove(USER_KEY);
+    _remove(LAST_ACTIVE_KEY);
+}
+
+// ---------------------------------------------------------------------------
+// Token storage
+// ---------------------------------------------------------------------------
+
+function _saveTokens({ access_token, refresh_token, expires_in }) {
+    _set(TOKEN_KEY, access_token);
+    if (refresh_token) _set(REFRESH_KEY, refresh_token);
+    if (expires_in)    _set(EXPIRES_AT_KEY, (Date.now() + (expires_in - 60) * 1000).toString());
+}
+
+export function getToken() {
+    return _get(TOKEN_KEY);
+}
+
+export function getRefreshToken() {
+    return _get(REFRESH_KEY);
+}
+
+// ---------------------------------------------------------------------------
+// Refresh token flow (con lock para evitar refreshes concurrentes)
+// ---------------------------------------------------------------------------
+
+let _refreshInFlight = null;
+
+export async function refreshAccessToken() {
+    if (_refreshInFlight) return _refreshInFlight;
+
+    _refreshInFlight = (async () => {
+        const refreshToken = getRefreshToken();
+        if (!refreshToken) throw new Error('no-refresh-token');
+
+        const res = await fetch(`${CONFIG.BACKEND_BASE_URL}/auth/refresh`, {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({ refresh_token: refreshToken }),
+        });
+
+        if (!res.ok) {
+            _clearAllAuthKeys();
+            throw new Error('refresh-failed');
+        }
+
+        const payload = await res.json();
+        _saveTokens(payload);
+        console.info('[auth] refreshed silently');
+        return payload.access_token;
+    })().finally(() => { _refreshInFlight = null; });
+
+    return _refreshInFlight;
+}
+
 // ---------------------------------------------------------------------------
 // Inactividad: el token se invalida localmente si no hay actividad en 24h
 // ---------------------------------------------------------------------------
 
-/** Registra actividad del usuario (llamar desde listeners de ventana). */
 export function touchActivity() {
     _set(LAST_ACTIVE_KEY, Date.now().toString());
 }
 
-/** Devuelve true y limpia la sesión si han pasado más de 24h sin actividad. */
 function _expireIfInactive() {
     const raw = _get(LAST_ACTIVE_KEY);
     if (!raw) return false; // sesión recién iniciada, no expirar
     if (Date.now() - parseInt(raw, 10) <= INACTIVITY_MS) return false;
 
     console.info('[auth] Sesión expirada por inactividad (24h).');
-    _remove(TOKEN_KEY);
-    _remove(USER_KEY);
-    _remove(LAST_ACTIVE_KEY);
+    _clearAllAuthKeys();
     return true;
 }
 
-/** Instala listeners de actividad de ventana y un chequeo periódico. */
 function _installActivityTracking() {
     if (typeof window === 'undefined') return;
 
@@ -64,21 +120,23 @@ function _installActivityTracking() {
         window.addEventListener(ev, _onActivity, { passive: true })
     );
 
-    // Chequeo periódico: si la pestaña queda abierta sin actividad
+    // Cada 5 min: chequear inactividad y hacer refresh proactivo antes de que expire
     setInterval(() => {
-        if (_expireIfInactive() && !IS_DEV) window.location.href = _buildAuthUrl();
-    }, 5 * 60 * 1000); // cada 5 minutos
+        if (_expireIfInactive()) {
+            if (!IS_DEV) window.location.href = _buildAuthUrl();
+            return;
+        }
+        const expiresAt = parseInt(_get(EXPIRES_AT_KEY) ?? '0', 10);
+        if (expiresAt && Date.now() > expiresAt - 120_000) {
+            refreshAccessToken().catch(() => {
+                console.warn('[auth] refresh failed, logging out.');
+                if (!IS_DEV) window.location.href = _buildAuthUrl();
+            });
+        }
+    }, 5 * 60 * 1000);
 }
 
 // ---------------------------------------------------------------------------
-
-export function getToken() {
-    return _get(TOKEN_KEY);
-}
-
-function _saveToken(token) {
-    _set(TOKEN_KEY, token);
-}
 
 export function getCachedUser() {
     const raw = _get(USER_KEY);
@@ -109,8 +167,7 @@ async function _exchangeCode(code) {
         body:    JSON.stringify({ code, redirect_uri: _redirectUri() }),
     });
     if (!res.ok) throw new Error(`Token exchange failed: ${res.status}`);
-    const { access_token } = await res.json();
-    return access_token;
+    return res.json(); // {access_token, refresh_token, expires_in}
 }
 
 async function _fetchUserInfo(token) {
@@ -121,21 +178,19 @@ async function _fetchUserInfo(token) {
     return res.json();
 }
 
-// Modo DEV: en Vite dev server no queremos forzar el redirect OAuth porque el
-// redirect_uri registrado apunta a producción (portal.gcf.group/app/). En su
-// lugar se expone `window.__setDevToken(token)` para pegar un token real
-// obtenido en producción y así trabajar localmente contra el backend real.
+// Modo DEV: redirect_uri apunta a producción, así que no forzamos el flujo OAuth.
+// Usar window.__setDevToken("token") para trabajar localmente con token real.
 const IS_DEV = typeof import.meta !== 'undefined' && import.meta.env?.DEV === true;
 
 function _installDevHelpers() {
     if (!IS_DEV || typeof window === 'undefined') return;
     window.__setDevToken = (token) => {
-        if (!token) { _remove(TOKEN_KEY); _remove(USER_KEY); console.info('[auth] Token dev borrado.'); return; }
+        if (!token) { _clearAllAuthKeys(); console.info('[auth] Token dev borrado.'); return; }
         _set(TOKEN_KEY, token);
         _remove(USER_KEY);
         console.info('[auth] Token dev guardado. Recarga la página.');
     };
-    window.__clearDevAuth = () => { _remove(TOKEN_KEY); _remove(USER_KEY); console.info('[auth] Auth dev limpiada.'); };
+    window.__clearDevAuth = () => { _clearAllAuthKeys(); console.info('[auth] Auth dev limpiada.'); };
 }
 
 export async function initAuth() {
@@ -149,10 +204,10 @@ export async function initAuth() {
     const code      = urlParams.get('code');
 
     if (code) {
-        // Nuevo login: resetear el reloj de inactividad
+        // Nuevo login: guardar todos los tokens y resetear el reloj de inactividad
         window.history.replaceState({}, '', window.location.pathname);
-        const token = await _exchangeCode(code);
-        _saveToken(token);
+        const payload = await _exchangeCode(code);
+        _saveTokens(payload);
         touchActivity();
     }
 
@@ -200,9 +255,7 @@ export async function initAuth() {
 }
 
 export function logout() {
-    _remove(TOKEN_KEY);
-    _remove(USER_KEY);
-    _remove(LAST_ACTIVE_KEY);
+    _clearAllAuthKeys();
     if (IS_DEV) {
         console.warn('[auth] logout() en DEV: no se redirige al OAuth de producción. Recarga manualmente.');
         return;

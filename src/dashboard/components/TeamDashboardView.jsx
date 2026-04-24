@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useDateRange } from '../hooks/useDateRange.js';
 import { fetchTeams, fetchTeamMetrics, fetchDeliveryTrend } from '../dashApi.js';
+import { onTimeLogChanged } from '../../core/events.js';
 import PeriodSelector from './PeriodSelector.jsx';
 import KpiCard from './KpiCard.jsx';
 import { AreaChart, DoughnutChart } from './Charts.jsx';
@@ -79,6 +80,8 @@ export default function TeamDashboardView({ user }) {
     const [teams, setTeams]                   = useState([]);
     const [teamData, setTeamData]             = useState(null);
     const [metricsLoading, setMetricsLoading] = useState(false);
+    const [refreshToken, setRefreshToken]     = useState(0);
+    const metricsLoadingRef                   = useRef(false);
 
     const [trendTeams, setTrendTeams]     = useState({ labels: [], series: [] });
     const [trendMembers, setTrendMembers] = useState({ labels: [], series: [] });
@@ -91,6 +94,13 @@ export default function TeamDashboardView({ user }) {
 
     useEffect(() => {
         fetchTeams().then(data => setTeams(data ?? [])).catch(() => {});
+    }, []);
+
+    useEffect(() => {
+        return onTimeLogChanged(() => {
+            if (metricsLoadingRef.current) return;
+            setRefreshToken(n => n + 1);
+        });
     }, []);
 
     // Sync activeRange immediately for non-custom periods
@@ -124,12 +134,13 @@ export default function TeamDashboardView({ user }) {
         setActiveRange({ start: customStart, end: customEnd });
     };
 
-    // Fetch team metrics when selection or active range changes
+    // Fetch team metrics when selection, active range, or a timelog mutation changes
     useEffect(() => {
         if (!activeRange.start || !activeRange.end) return;
         if (selectedTeam === 'all') {
             if (!teams.length) return;
             setMetricsLoading(true);
+            metricsLoadingRef.current = true;
             Promise.all(
                 teams.map(t =>
                     fetchTeamMetrics(t.id, activeRange.start, activeRange.end).catch(() => null)
@@ -139,16 +150,23 @@ export default function TeamDashboardView({ user }) {
                     const combined = results.flatMap(r => r?.memberMetrics ?? []);
                     setTeamData(combined.length ? { memberMetrics: combined } : null);
                 })
-                .finally(() => setMetricsLoading(false));
+                .finally(() => {
+                    setMetricsLoading(false);
+                    metricsLoadingRef.current = false;
+                });
             return;
         }
 
         setMetricsLoading(true);
+        metricsLoadingRef.current = true;
         fetchTeamMetrics(selectedTeam, activeRange.start, activeRange.end)
             .then(data => setTeamData(data ?? null))
             .catch(() => setTeamData(null))
-            .finally(() => setMetricsLoading(false));
-    }, [selectedTeam, activeRange.start, activeRange.end, teams]);
+            .finally(() => {
+                setMetricsLoading(false);
+                metricsLoadingRef.current = false;
+            });
+    }, [selectedTeam, activeRange.start, activeRange.end, teams, refreshToken]);
 
     const memberMetrics = teamData?.memberMetrics ?? [];
 

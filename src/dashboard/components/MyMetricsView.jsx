@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchMyMetrics, fetchUserSkills } from '../dashApi.js';
 import { useDateRange } from '../hooks/useDateRange.js';
+import { onTimeLogChanged } from '../../core/events.js';
 import PeriodSelector from './PeriodSelector.jsx';
 import KpiCard from './KpiCard.jsx';
 import { LineChart, BarChart, GaugeChart, BellChart, RadarChart } from './Charts.jsx';
@@ -52,10 +53,13 @@ export default function MyMetricsView({ user }) {
     const [skills, setSkills]   = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError]     = useState(null);
+    const fetchingRef           = useRef(false);
+    const rangeRef              = useRef({ start: dr.range.start, end: dr.range.end });
 
     const load = useCallback((start, end) => {
         setLoading(true);
         setError(null);
+        fetchingRef.current = true;
 
         Promise.all([
             fetchMyMetrics(start, end),
@@ -66,12 +70,23 @@ export default function MyMetricsView({ user }) {
                 setSkills(skillsData ?? metricsData?.skills ?? []);
             })
             .catch(err => setError(err.message))
-            .finally(() => setLoading(false));
+            .finally(() => {
+                setLoading(false);
+                fetchingRef.current = false;
+            });
     }, [user?.id]);
 
     useEffect(() => {
+        rangeRef.current = { start: dr.range.start, end: dr.range.end };
         load(dr.range.start, dr.range.end);
     }, [dr.range.start, dr.range.end, load]);
+
+    useEffect(() => {
+        return onTimeLogChanged(() => {
+            if (fetchingRef.current) return;
+            load(rangeRef.current.start, rangeRef.current.end);
+        });
+    }, [load]);
 
     const handlePeriod = key => {
         dr.setPeriod(key);

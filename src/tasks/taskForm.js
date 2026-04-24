@@ -1,6 +1,7 @@
 import { STATE }      from '../core/state.js';
 import { createTask, updateTask, deleteTask, fetchTasks } from '../api/api.js';
 import { createTimeLog, updateTimeLog, deleteTimeLog, fetchTimeLogs } from '../api/timeLogs.js';
+import { emitTimeLogChanged } from '../core/events.js';
 import { renderBoard } from '../board/render.js';
 import { generateId, formatTime, formatDate, isOverdue, formatTimeCompact, formatLogDate }  from '../shared/utils.js';
 import { CONFIG }      from '../core/config.js';
@@ -378,6 +379,7 @@ export async function saveNewTimeLog() {
         const res = await createTimeLog(task.id, task.type === 'activity', { logDate: date, seconds });
         const updated = res?.task ?? res?.activity;
         if (updated) syncTaskFromBackend(task, updated);
+        emitTimeLogChanged({ taskId: task.id, type: 'create' });
     } catch (e) {
         console.error('[saveNewTimeLog]', e);
         // Revertir.
@@ -436,6 +438,7 @@ export async function saveEditTimeLog(logId) {
         const res = await updateTimeLog(logId, seconds);
         const updated = res?.task ?? res?.activity;
         if (updated) syncTaskFromBackend(task, updated);
+        emitTimeLogChanged({ taskId: task.id, type: 'update' });
     } catch (e) {
         console.error('[saveEditTimeLog]', e);
         entry.seconds = prevSeconds;
@@ -476,6 +479,7 @@ export async function deleteTimeLogPrompt(logId) {
         const res = await deleteTimeLog(logId);
         const updated = res?.task ?? res?.activity;
         if (updated) syncTaskFromBackend(task, updated);
+        emitTimeLogChanged({ taskId: task.id, type: 'delete' });
     } catch (e) {
         console.error('[deleteTimeLogPrompt]', e);
         task.timeLog.splice(entryIndex, 0, entry);

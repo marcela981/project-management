@@ -4,42 +4,54 @@ import { CONFIG }    from '../core/config.js';
 import { STATE }     from '../core/state.js';
 import { save }      from '../core/storage.js';
 import { generateId } from '../shared/utils.js';
-import { getToken, logout }      from '../auth/auth.js';
-import { flushActiveTimers }     from '../timer/timerFlush.js';
+import { getToken, logout, refreshAccessToken } from '../auth/auth.js';
+import { flushActiveTimers }                    from '../timer/timerFlush.js';
 
-async function apiFetch(path, options = {}) {
-    const token = getToken();
-    const response = await fetch(`${CONFIG.BACKEND_URL}${path}`, {
+// Hace el fetch inyectando Authorization; ante un 401 intenta refresh silencioso
+// y reintenta una vez. Si el reintento vuelve a fallar → logout forzoso.
+async function _authedFetch(url, opts = {}) {
+    const doFetch = (token) => fetch(url, {
+        ...opts,
         headers: {
-            'Content-Type': 'application/json',
+            ...opts.headers,
             ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         },
-        ...options,
     });
-    if (response.status === 401) {
+
+    let res = await doFetch(getToken());
+    if (res.status !== 401) return res;
+
+    try {
+        const newToken = await refreshAccessToken();
+        res = await doFetch(newToken);
+        if (res.status === 401) {
+            flushActiveTimers();
+            logout();
+            return null;
+        }
+    } catch {
         flushActiveTimers();
         logout();
-        return;
+        return null;
     }
-    if (!response.ok) {
-        throw new Error(`API error ${response.status}: ${response.statusText}`);
-    }
-    const text = await response.text();
+
+    return res;
+}
+
+async function apiFetch(path, options = {}) {
+    const res = await _authedFetch(`${CONFIG.BACKEND_URL}${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options,
+    });
+    if (res === null) return;
+    if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`);
+    const text = await res.text();
     return text ? JSON.parse(text) : {};
 }
 
 async function deckFetch(path) {
-    const token = getToken();
-    const res = await fetch(`${CONFIG.BACKEND_BASE_URL}${path}`, {
-        headers: {
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-    });
-    if (res.status === 401) {
-        flushActiveTimers();
-        logout();
-        return;
-    }
+    const res = await _authedFetch(`${CONFIG.BACKEND_BASE_URL}${path}`, {});
+    if (res === null) return;
     if (!res.ok) throw new Error(`Deck error ${res.status}: ${res.statusText}`);
     return res.json();
 }

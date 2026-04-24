@@ -1,7 +1,7 @@
 /** CRUD de time_logs con idempotencia, cola local y reintentos. */
 
 import { CONFIG } from '../core/config.js';
-import { getToken, logout } from '../auth/auth.js';
+import { getToken, logout, refreshAccessToken } from '../auth/auth.js';
 import { generateId } from '../shared/utils.js';
 import { flushActiveTimers } from '../timer/timerFlush.js';
 
@@ -40,6 +40,7 @@ const wait = (ms) => new Promise(res => setTimeout(res, ms));
 
 async function fetchWithRetry(url, options, clientOpId = null, retries = 3) {
     let attempt = 0;
+    let _tokenRefreshed = false;
 
     while (attempt <= retries) {
         try {
@@ -53,7 +54,15 @@ async function fetchWithRetry(url, options, clientOpId = null, retries = 3) {
             const response = await fetch(url, { ...options, headers });
 
             if (response.status === 401) {
-                console.warn('[timeLogs] 401 Unauthorized, re-authenticating...');
+                if (!_tokenRefreshed) {
+                    try {
+                        await refreshAccessToken();
+                        _tokenRefreshed = true;
+                        console.info('[timeLogs] Token refreshed silently, retrying request...');
+                        continue; // reintenta con el token nuevo sin incrementar attempt
+                    } catch { /* cae a logout */ }
+                }
+                console.warn('[auth] refresh failed, logging out.');
                 flushActiveTimers();
                 logout();
                 return null;
