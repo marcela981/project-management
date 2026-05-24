@@ -14,6 +14,11 @@ import { emitTimeLogChanged } from '../core/events.js';
 const NOTIFY_THRESHOLD    = { project: 3 * 3600, activity: 1 * 3600 };
 const HEARTBEAT_INTERVAL  = 60; // seconds between silent backend syncs
 
+// Heartbeat-in-flight guard per timer type. setInterval keeps firing _tick every
+// 1s even while an awaited saveTime is pending — without this flag, slow saves
+// (>1s) trigger overlapping heartbeats that all accumulate into the same row.
+const _heartbeatInFlight = { project: false, activity: false };
+
 export function startTimer(taskId) {
     const task = STATE.tasks.find(t => t.id === taskId);
     if (!task) return;
@@ -32,10 +37,12 @@ export function startTimer(taskId) {
         ? task.subtasks.find(s => s.id === selectedSubId)
         : null;
 
+    const now = Date.now();
     STATE.timers[type] = {
         taskId,
         subtaskId:    selectedSubId,
-        startTime:    Date.now(),
+        startTime:    now,
+        sessionStart: now,
         accumulated:  activeSub ? (activeSub.timeSpent ?? 0) : (task.timeSpent ?? 0),
         nextNotifyAt: NOTIFY_THRESHOLD[type],
         intervalId:   setInterval(() => _tick(taskId, type), 1000)
@@ -65,8 +72,9 @@ export async function stopTimer(taskId) {
     if (!STATE.timers[type] || STATE.timers[type].taskId !== taskId) return;
 
     clearInterval(STATE.timers[type].intervalId);
-    const elapsed   = _elapsed(type);
-    const subtaskId = STATE.timers[type].subtaskId;
+    const elapsed       = _elapsed(type);
+    const subtaskId     = STATE.timers[type].subtaskId;
+    const sessionStart  = new Date(STATE.timers[type].sessionStart).toISOString();
     STATE.timers[type] = null;
     saveTimers();
 
@@ -77,11 +85,11 @@ export async function stopTimer(taskId) {
         const progressAfter  = Math.round((completedAfter / task.subtasks.length) * 100);
 
         if (progressAfter === 100 && task.type === 'project') {
-            openCompletionModal(taskId, elapsed, subtaskId);
+            openCompletionModal(taskId, elapsed, subtaskId, sessionStart);
             return;
         }
 
-        await saveTime(taskId, elapsed, subtaskId, {});
+        await saveTime(taskId, elapsed, subtaskId, {}, sessionStart);
         emitTimeLogChanged({ taskId, type: 'create' });
         if (sub) sub.completed = true;
         const done = task.subtasks.filter(s => s.completed).length;
@@ -89,10 +97,10 @@ export async function stopTimer(taskId) {
         await updateTask(taskId, { subtasks: task.subtasks, progress: task.progress });
     } else {
         if (task.type === 'project') {
-            openCompletionModal(taskId, elapsed, null);
+            openCompletionModal(taskId, elapsed, null, sessionStart);
             return;
         }
-        await saveTime(taskId, elapsed, subtaskId, { progress: 100 });
+        await saveTime(taskId, elapsed, subtaskId, { progress: 100 }, sessionStart);
         emitTimeLogChanged({ taskId, type: 'create' });
         await completeTask(taskId);
     }
@@ -103,10 +111,12 @@ export function cancelCompletion(taskId) {
     const task = STATE.tasks.find(t => t.id === taskId);
     if (task) {
         const type = task.type;
+        const now  = Date.now();
         STATE.timers[type] = {
             taskId,
             subtaskId:    'none',
-            startTime:    Date.now(),
+            startTime:    now,
+            sessionStart: now,
             accumulated:  task.timeSpent ?? 0,
             nextNotifyAt: NOTIFY_THRESHOLD[type],
             intervalId:   setInterval(() => _tick(taskId, type), 1000),
@@ -124,11 +134,15 @@ export function cancelPause(taskId) {
         const prev      = STATE.timers[type];
         const prevElapsed   = prev ? Math.floor((Date.now() - prev.startTime) / 1000) : 0;
         const prevSubtaskId = prev?.subtaskId ?? null;
-        const prevAccum     = prev ? prev.accumulated + prevElapsed : (task.timeSpent ?? 0);
+        const prevAccum        = prev ? prev.accumulated + prevElapsed : (task.timeSpent ?? 0);
+        const now              = Date.now();
+        // cancelPause continues the same session — preserve the original sessionStart
+        const prevSessionStart = prev?.sessionStart ?? now;
         STATE.timers[type] = {
             taskId,
             subtaskId:    prevSubtaskId,
-            startTime:    Date.now(),
+            startTime:    now,
+            sessionStart: prevSessionStart,
             accumulated:  prevAccum,
             nextNotifyAt: NOTIFY_THRESHOLD[type],
             intervalId:   setInterval(() => _tick(taskId, type), 1000)
@@ -143,22 +157,23 @@ export async function confirmPause(taskId, elapsedTime) {
     const task = STATE.tasks.find(t => t.id === taskId);
     if (!task) return;
 
-    const type        = task.type;
-    const progress    = parseInt(document.getElementById('pauseProgress').value, 10);
-    const observation = document.getElementById('pauseObservation').value.trim();
-    const subtaskId   = STATE.timers[type]?.subtaskId ?? null;
+    const type         = task.type;
+    const progress     = parseInt(document.getElementById('pauseProgress').value, 10);
+    const observation  = document.getElementById('pauseObservation').value.trim();
+    const subtaskId    = STATE.timers[type]?.subtaskId ?? null;
+    const sessionStart = new Date(STATE.timers[type]?.sessionStart ?? Date.now()).toISOString();
 
     if (subtaskId && subtaskId !== 'none') {
         // El progreso ingresado corresponde a la subtarea, no a la tarea global
         const sub = task.subtasks.find(s => s.id === subtaskId);
         if (sub) sub.progress = progress;
-        await saveTime(taskId, elapsedTime, subtaskId, { observation: observation || null });
+        await saveTime(taskId, elapsedTime, subtaskId, { observation: observation || null }, sessionStart);
         await updateTask(taskId, { subtasks: task.subtasks });
     } else {
         await saveTime(taskId, elapsedTime, subtaskId, {
             progress,
             observation: observation || null,
-        });
+        }, sessionStart);
     }
     emitTimeLogChanged({ taskId, type: 'create' });
 
@@ -186,6 +201,8 @@ export function restoreTimers() {
         // startTime original se preservó — el elapsed acumulará correctamente
         STATE.timers[type] = {
             ...timerData,
+            // sessionStart might be missing in timers saved before this change
+            sessionStart: timerData.sessionStart ?? timerData.startTime,
             intervalId: setInterval(() => _tick(timerData.taskId, type), 1000),
         };
     }
@@ -209,12 +226,13 @@ export async function timerNotifNo(taskId, type) {
     const timer = STATE.timers[type];
     if (timer?.taskId === taskId) {
         clearInterval(timer.intervalId);
-        const elapsed = _elapsed(type);
-        const subtaskId = timer.subtaskId ?? null;
+        const elapsed      = _elapsed(type);
+        const subtaskId    = timer.subtaskId ?? null;
+        const sessionStart = new Date(timer.sessionStart ?? timer.startTime).toISOString();
         STATE.timers[type] = null;
         saveTimers();
         if (elapsed > 0) {
-            await saveTime(taskId, elapsed, subtaskId, null).catch(() => {});
+            await saveTime(taskId, elapsed, subtaskId, null, sessionStart).catch(() => {});
         }
     }
 
@@ -253,20 +271,28 @@ async function _tick(taskId, type) {
     const elapsed = _elapsed(type);
     el.textContent = formatTime(timer.accumulated + elapsed);
 
-    // Heartbeat: silently persist elapsed to backend every HEARTBEAT_INTERVAL seconds
-    if (elapsed >= HEARTBEAT_INTERVAL) {
-        const subtaskId = timer.subtaskId;
+    // Heartbeat: silently persist elapsed to backend every HEARTBEAT_INTERVAL seconds.
+    // The in-flight guard prevents the next setInterval tick from launching a
+    // second concurrent save while the first is still awaiting the network — the
+    // overlap was double-counting time on the backend row.
+    if (elapsed >= HEARTBEAT_INTERVAL && !_heartbeatInFlight[type]) {
+        _heartbeatInFlight[type] = true;
+        const subtaskId    = timer.subtaskId;
+        const sessionStart = new Date(timer.sessionStart ?? timer.startTime).toISOString();
         try {
-            await saveTime(taskId, elapsed, subtaskId, null);
+            await saveTime(taskId, elapsed, subtaskId, null, sessionStart);
             // Only advance if timer is still active for this task
             if (STATE.timers[type]?.taskId === taskId) {
                 STATE.timers[type].accumulated  += elapsed;
                 STATE.timers[type].startTime     = Date.now();
+                // sessionStart is intentionally NOT reset — it marks this session's origin
                 STATE.timers[type].nextNotifyAt -= elapsed; // keep threshold relative to total
                 saveTimers();
             }
         } catch {
             // Offline or 401: leave startTime unchanged, retry next interval
+        } finally {
+            _heartbeatInFlight[type] = false;
         }
     }
 

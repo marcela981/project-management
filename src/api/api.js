@@ -1,56 +1,13 @@
 /** Capa de datos: REST + localStorage; Deck y auth vía backend. */
 
-import { CONFIG }    from '../core/config.js';
-import { STATE }     from '../core/state.js';
-import { save }      from '../core/storage.js';
+import { CONFIG }     from '../core/config.js';
+import { STATE }      from '../core/state.js';
+import { save }       from '../core/storage.js';
 import { generateId } from '../shared/utils.js';
-import { getToken, logout, refreshAccessToken } from '../auth/auth.js';
-import { flushActiveTimers }                    from '../timer/timerFlush.js';
-
-// Hace el fetch inyectando Authorization; ante un 401 intenta refresh silencioso
-// y reintenta una vez. Si el reintento vuelve a fallar → logout forzoso.
-async function _authedFetch(url, opts = {}) {
-    const doFetch = (token) => fetch(url, {
-        ...opts,
-        headers: {
-            ...opts.headers,
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
-        },
-    });
-
-    let res = await doFetch(getToken());
-    if (res.status !== 401) return res;
-
-    try {
-        const newToken = await refreshAccessToken();
-        res = await doFetch(newToken);
-        if (res.status === 401) {
-            flushActiveTimers();
-            logout();
-            return null;
-        }
-    } catch {
-        flushActiveTimers();
-        logout();
-        return null;
-    }
-
-    return res;
-}
-
-async function apiFetch(path, options = {}) {
-    const res = await _authedFetch(`${CONFIG.BACKEND_URL}${path}`, {
-        headers: { 'Content-Type': 'application/json' },
-        ...options,
-    });
-    if (res === null) return;
-    if (!res.ok) throw new Error(`API error ${res.status}: ${res.statusText}`);
-    const text = await res.text();
-    return text ? JSON.parse(text) : {};
-}
+import { apiFetch, authedFetch } from './http.js';
 
 async function deckFetch(path) {
-    const res = await _authedFetch(`${CONFIG.BACKEND_BASE_URL}${path}`, {});
+    const res = await authedFetch(`${CONFIG.BACKEND_BASE_URL}${path}`, {});
     if (res === null) return;
     if (!res.ok) throw new Error(`Deck error ${res.status}: ${res.statusText}`);
     return res.json();
@@ -64,8 +21,8 @@ export async function fetchTasks() {
     if (!CONFIG.BACKEND_URL) return [];
 
     const [tareas, activities] = await Promise.all([
-        apiFetch('/tareas').catch(() => []),
-        apiFetch('/activities').catch(() => []),
+        apiFetch('/api/proyectos/tareas').catch(() => []),
+        apiFetch('/api/proyectos/activities').catch(() => []),
     ]);
 
     return [
@@ -74,18 +31,21 @@ export async function fetchTasks() {
     ];
 }
 
-export async function saveTime(taskId, timeSpent, subtaskId = null, feedback = null) {
+export async function saveTime(taskId, timeSpent, subtaskId = null, feedback = null, sessionStartAt = null) {
     if (CONFIG.BACKEND_URL) {
         const endpoint = _isActivity(taskId)
-            ? `/activities/${taskId}/time`
-            : `/tareas/${taskId}/time`;
+            ? `/api/proyectos/activities/${taskId}/time`
+            : `/api/proyectos/tareas/${taskId}/time`;
 
         const task = STATE.tasks.find(t => t.id === taskId);
         const absoluteTime = (task?.timeSpent ?? 0) + timeSpent;
 
+        // Backend schema field is `startAt` (TimeRecord.startAt). Mismatched
+        // names made every save drop into the legacy merge-by-day path, so two
+        // separate sessions for the same task collapsed into a single row.
         await apiFetch(endpoint, {
             method: 'POST',
-            body: JSON.stringify({ timeSpent, subtaskId, feedback, absoluteTime }),
+            body: JSON.stringify({ timeSpent, subtaskId, feedback, absoluteTime, startAt: sessionStartAt }),
         });
     }
 
@@ -146,7 +106,7 @@ export async function createTask(data) {
                     timeLogs:      newTask.timeLogs ?? [],
                 }),
             };
-            const saved = await apiFetch('/activities', {
+            const saved = await apiFetch('/api/proyectos/activities', {
                 method: 'POST',
                 body: JSON.stringify(payload),
             });
@@ -171,7 +131,7 @@ export async function createTask(data) {
                     timeLogs:      newTask.timeLogs ?? [],
                 }),
             };
-            const saved = await apiFetch('/tareas', {
+            const saved = await apiFetch('/api/proyectos/tareas', {
                 method: 'POST',
                 body: JSON.stringify(payload),
             });
@@ -200,7 +160,7 @@ export async function updateTask(taskId, data) {
                 startDate:   data.startDate ?? null,
                 deadline:    data.deadline ?? null,
             };
-            const saved = await apiFetch(`/activities/${taskId}`, {
+            const saved = await apiFetch(`/api/proyectos/activities/${taskId}`, {
                 method: 'PATCH',
                 body: JSON.stringify(payload),
             });
@@ -209,7 +169,7 @@ export async function updateTask(taskId, data) {
                 STATE.tasks[idx] = saved?.activity ?? { ...STATE.tasks[idx], ...data };
             }
         } else {
-            const saved = await apiFetch(`/tareas/${taskId}`, {
+            const saved = await apiFetch(`/api/proyectos/tareas/${taskId}`, {
                 method: 'PATCH',
                 body: JSON.stringify(data),
             });
@@ -231,8 +191,8 @@ export async function updateTask(taskId, data) {
 export async function deleteTask(taskId) {
     if (CONFIG.BACKEND_URL) {
         const endpoint = _isActivity(taskId)
-            ? `/activities/${taskId}`
-            : `/tareas/${taskId}`;
+            ? `/api/proyectos/activities/${taskId}`
+            : `/api/proyectos/tareas/${taskId}`;
         await apiFetch(endpoint, { method: 'DELETE' });
     }
 
@@ -245,7 +205,7 @@ export async function updateColumn(taskId, column) {
     const task = STATE.tasks.find(t => t.id === taskId);
 
     if (task?.type !== 'activity' && CONFIG.BACKEND_URL) {
-        await apiFetch(`/tareas/${taskId}/columna`, {
+        await apiFetch(`/api/proyectos/tareas/${taskId}/columna`, {
             method: 'PATCH',
             body: JSON.stringify({ column }),
         });
@@ -262,14 +222,14 @@ export async function completeTask(taskId) {
 
     if (CONFIG.BACKEND_URL) {
         if (isAct) {
-            const saved = await apiFetch(`/activities/${taskId}`, {
+            const saved = await apiFetch(`/api/proyectos/activities/${taskId}`, {
                 method: 'PATCH',
                 body: JSON.stringify({ progress: 100 }),
             });
             if (saved?.activity?.column)      savedColumn      = saved.activity.column;
             if (saved?.activity?.completedAt) savedCompletedAt = saved.activity.completedAt;
         } else {
-            const saved = await apiFetch(`/tareas/${taskId}/finalizar`, { method: 'POST' });
+            const saved = await apiFetch(`/api/proyectos/tareas/${taskId}/finalizar`, { method: 'POST' });
             if (saved?.task?.column)      savedColumn      = saved.task.column;
             if (saved?.task?.completedAt) savedCompletedAt = saved.task.completedAt;
         }
@@ -293,8 +253,8 @@ export async function reopenTask(taskId) {
 
     if (CONFIG.BACKEND_URL) {
         const endpoint = isAct
-            ? `/activities/${taskId}/reabrir`
-            : `/tareas/${taskId}/reabrir`;
+            ? `/api/proyectos/activities/${taskId}/reabrir`
+            : `/api/proyectos/tareas/${taskId}/reabrir`;
         await apiFetch(endpoint, { method: 'POST' });
     }
 

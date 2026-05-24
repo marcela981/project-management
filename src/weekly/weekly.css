@@ -291,6 +291,42 @@
     pointer-events: none;
 }
 
+/* Current-time indicator — rendered imperatively in weekly.js */
+.weekly-current-time {
+    position: absolute;
+    left: 0;
+    right: 0;
+    z-index: 10; /* above blocks (z-index 2-3) and hover (z-index 3); below modals (1100) */
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    transform: translateY(-50%); /* center the 8px dot on the exact pixel position */
+}
+
+.weekly-current-time-dot {
+    flex-shrink: 0;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #EF4444;
+}
+
+.weekly-current-time-line {
+    flex: 1;
+    height: 2px;
+    background: #EF4444;
+    opacity: 0.85;
+}
+
+.weekly-current-time-label {
+    flex-shrink: 0;
+    font-size: 0.5625rem;
+    font-weight: 600;
+    color: #EF4444;
+    padding: 0 3px;
+    line-height: 1;
+}
+
 /* Business hours label (shown when user TZ ≠ NY) */
 .weekly-biz-hours-label {
     padding: 0.1875rem 1.5rem;
@@ -680,6 +716,22 @@
 
 .weekly-view .cal-period-nav { position: relative; }
 
+/* ── Timezone badge ──────────────────────────────────────────────────────── */
+
+.weekly-tz-badge {
+    font-size: 0.625rem;
+    color: var(--color-text-secondary);
+    padding: 0.125rem 0.5rem;
+    align-self: center;
+    opacity: 0.7;
+    cursor: default;
+    white-space: nowrap;
+}
+
+.weekly-tz-badge:hover {
+    opacity: 1;
+}
+
 .weekly-cache-badge {
     position: absolute;
     top: 4px;
@@ -836,15 +888,15 @@
 
 /* ── Calendar event detail modal ─────────────────────────────────────────── */
 
-.cal-event-modal .modal-content {
-    max-width: 480px;
+.cal-event-modal .modal {
+    max-width: min(480px, 92vw);
     border-left: 4px solid var(--cal-event-color);
 }
 
 .cal-event-when {
     color: var(--color-text-secondary);
     font-size: 0.875rem;
-    margin: 0.25rem 0 1rem;
+    margin: 0 0 1rem;
 }
 
 .cal-event-row {
@@ -866,10 +918,22 @@
 
 .cal-event-description {
     white-space: pre-wrap;
+    word-break: break-word;
 }
 
-.cal-event-actions {
-    margin-top: 1rem;
-    display: flex;
-    justify-content: flex-end;
+.cal-event-footer {
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+}
+
+@media (max-width: 480px) {
+    .cal-event-footer {
+        flex-direction: column-reverse;
+    }
+
+    .cal-event-footer .btn {
+        width: 100%;
+        justify-content: center;
+    }
 }

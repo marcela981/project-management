@@ -52,6 +52,11 @@ let _lastWeekEndDay   = null;
 // (next week / prev week) reuse the existing prefetch, never re-trigger it.
 let _calendarPrefetchDone = false;
 
+// Current-time indicator — one setInterval at most; replaced on each _render().
+let _timeLineTimer = null;
+
+const _sameId = (a, b) => String(a) === String(b);
+
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
@@ -89,12 +94,13 @@ export function renderWeekly(container, toolbarHtml = '') {
         window.addEventListener('pointermove',         _onResizePointerMove);
         window.addEventListener('pointerup',           _onResizePointerUp);
         window.addEventListener('pointercancel',       _onResizePointerCancel);
+        window.addEventListener('blur',                _onResizePointerCancel);
     }
 }
 
 // ── preferences-updated handler (Fase 5 Antipatrón 1) ────────────────────────
 
-function _onPreferencesUpdated(e) {
+async function _onPreferencesUpdated(e) {
     const newPrefs = (e?.detail && typeof e.detail === 'object') ? e.detail : getPreferences();
     const wsd      = newPrefs.week_start_day;
     const wed      = newPrefs.week_end_day;
@@ -108,7 +114,7 @@ function _onPreferencesUpdated(e) {
     // pick them up from the in-memory mirror without any /blocks request.
     // If the bounds shifted, drop the entry so the next fetchBlocks falls
     // back to the IDB → network path.
-    if (boundsChanged) invalidateBlocksCache(_weekStartIso);
+    if (boundsChanged) await invalidateBlocksCache(_weekStartIso);
     _render();
 }
 
@@ -146,7 +152,8 @@ export function handleWeeklyClick(action, el) {
         }
         case 'weekly-edit-block': {
             const blockId = el.dataset.blockId;
-            const block   = getBlocks().find(b => b.id === blockId);
+            const block   = getBlocks().find(b => _sameId(b.id, blockId));
+            console.debug('[weekly:edit]', { blockId: el.dataset.blockId, foundBlock: !!block, blockSnapshot: block });
             if (block) openBlockModal(
                 { mode: 'edit', day: block.day, weekStartIso: _weekStartIso, block },
                 () => _render()
@@ -155,7 +162,7 @@ export function handleWeeklyClick(action, el) {
         }
         case 'weekly-remove-block': {
             const blockId = el.dataset.blockId;
-            const block   = getBlocks().find(b => b.id === blockId);
+            const block   = getBlocks().find(b => _sameId(b.id, blockId));
             if (block?.series_id || block?.is_virtual) {
                 askScope().then(scope => {
                     if (scope === null) return;
@@ -273,6 +280,7 @@ async function _render() {
     _logRenderPerf();
 
     _updateStickyMetrics();
+    _mountCurrentTimeLine(days);
 
     // Fase 3 — show "actualizando…" while a SWR revalidation is in flight,
     // and re-render once it resolves so the user sees fresh data.
@@ -514,7 +522,22 @@ function _renderNav(days) {
         ? `<div class="cal-period-nav-views" role="toolbar" aria-label="Vista del calendario">${_toolbarHtml}</div>`
         : '';
 
-    return renderPeriodNav({ label: range, actionPrefix: 'weekly', extraContent: viewsHtml });
+    const tzBadge = _renderTzBadge();
+
+    return renderPeriodNav({ label: range, actionPrefix: 'weekly', extraContent: viewsHtml + tzBadge });
+}
+
+function _renderTzBadge() {
+    const tz        = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const offsetMin = -new Date().getTimezoneOffset();
+    const sign      = offsetMin >= 0 ? '+' : '-';
+    const absH      = Math.floor(Math.abs(offsetMin) / 60);
+    const absM      = Math.abs(offsetMin) % 60;
+    const offsetStr = absM
+        ? `UTC${sign}${absH}:${String(absM).padStart(2, '0')}`
+        : `UTC${sign}${absH}`;
+    return `<span class="weekly-tz-badge"
+                  title="Los logs se guardan en UTC y se muestran en tu hora local">${tz} (${offsetStr})</span>`;
 }
 
 // ── Time axis ────────────────────────────────────────────────────────────────
@@ -714,14 +737,15 @@ function _renderBlock(block, blockLayout = { column: 0, totalColumns: 1 }, opts 
     const isMatch  = opts.isMatch ?? false;
     const matchCls = isMatch ? ' weekly-block--fulfilled-shadow' : '';
 
-    const styleBase = `top:${top}px;height:${height}px;${posStyle}`;
+    const notesTitle = block.notes && height >= 60 ? ` title="${_esc(block.notes)}"` : '';
+    const styleBase  = `top:${top}px;height:${height}px;${posStyle}`;
 
     return `
         <div class="weekly-block ${blockClass}${matchCls}"
              style="${colorStyle}${styleBase}"
              draggable="true"
              data-action="weekly-edit-block"
-             data-block-id="${block.id}">
+             data-block-id="${block.id}"${notesTitle}>
             <div class="weekly-block-resize weekly-block-resize-top"></div>
             ${height >= 32 && !isPersonal ? '<span class="weekly-block-badge weekly-block-badge--planned">Planeado</span>' : ''}
             <div class="weekly-block-title">${typeIcon}${recurIcon}${_esc(title)}</div>
@@ -748,7 +772,7 @@ function _setupDragDrop() {
         if (!rm) return;
         e.stopPropagation();
         const blockId = rm.dataset.blockId;
-        const block   = getBlocks().find(b => b.id === blockId);
+        const block   = getBlocks().find(b => _sameId(b.id, blockId));
         if (block?.series_id || block?.is_virtual) {
             askScope().then(scope => {
                 if (scope === null) return;
@@ -768,7 +792,7 @@ function _setupDragDrop() {
             _dragTaskId  = null;
             blockEl.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
-            const block = getBlocks().find(b => b.id === _dragBlockId);
+            const block = getBlocks().find(b => _sameId(b.id, _dragBlockId));
             _dragBlockDuration = block
                 ? timeToMinutes(block.end_time) - timeToMinutes(block.start_time)
                 : 60;
@@ -831,6 +855,8 @@ function _setupDragDrop() {
                 newEndM   = Math.min(newStartM + _dragBlockDuration, HOUR_END * 60 + 59);
             }
 
+            console.debug('[weekly:drop]', { blockId: _dragBlockId, day: targetDay,
+                newStart: newStartM, newEnd: newEndM });
             const saved = await updateBlock(_dragBlockId, {
                 day_of_week: targetDay,
                 start_time:  _minsToTime(newStartM),
@@ -867,6 +893,8 @@ function _setupResize() {
         if (e.target.closest('.weekly-block-resize')) e.stopPropagation();
     });
 
+    _container.addEventListener('contextmenu', _onResizePointerCancel);
+
     _container.addEventListener('pointerdown', e => {
         const handle = e.target.closest('.weekly-block-resize');
         if (!handle) return;
@@ -878,7 +906,7 @@ function _setupResize() {
         if (!blockEl) return;
 
         const blockId = blockEl.dataset.blockId;
-        const block   = getBlocks().find(b => b.id === blockId);
+        const block   = getBlocks().find(b => _sameId(b.id, blockId));
         if (!block) return;
 
         const edge = handle.classList.contains('weekly-block-resize-top') ? 'top' : 'bottom';
@@ -1072,4 +1100,59 @@ function _today() {
 
 function _esc(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ── Current-time indicator ────────────────────────────────────────────────────
+
+/**
+ * Mounts a red horizontal line inside today's column body and updates it every
+ * 60 seconds. Handles three edge cases automatically on each tick:
+ *   - Midnight crossing: _today() re-evaluated, line jumps to the new day's column.
+ *   - Week navigation: _render() clears _timeLineTimer before calling this again.
+ *   - Outside grid hours: line is removed when current hour < _gridHourStart.
+ *
+ * Formula (mirrors block positioning in _renderBlock / _renderLogBlock):
+ *   topPx = (currentHour - _gridHourStart) * PX_PER_HOUR + currentMinute
+ * With PX_PER_HOUR = 60, 1 minute = 1 pixel.
+ */
+function _mountCurrentTimeLine(days) {
+    if (_timeLineTimer) {
+        clearInterval(_timeLineTimer);
+        _timeLineTimer = null;
+    }
+
+    const update = () => {
+        if (!_container) return;
+
+        // Remove any existing indicator (handles midnight column-switch cleanly)
+        _container.querySelectorAll('.weekly-current-time').forEach(el => el.remove());
+
+        const today     = _today();
+        const todayDate = days.find(d => d.getTime() === today.getTime());
+        if (!todayDate) return; // visible week doesn't include today
+
+        const now = new Date();
+        const h   = now.getHours();
+        const m   = now.getMinutes();
+
+        if (h < _gridHourStart) return; // before grid start (e.g. 5 am when grid starts at 6)
+
+        const topPx     = (h - _gridHourStart) * PX_PER_HOUR + m;
+        const timeLabel = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+
+        const colBody = _container.querySelector(`.weekly-col-body[data-day="${todayDate.getDay()}"]`);
+        if (!colBody) return;
+
+        const el = document.createElement('div');
+        el.className  = 'weekly-current-time';
+        el.style.top  = topPx + 'px';
+        el.innerHTML  = `
+            <div class="weekly-current-time-dot"></div>
+            <div class="weekly-current-time-line"></div>
+            <span class="weekly-current-time-label">${timeLabel}</span>`;
+        colBody.appendChild(el);
+    };
+
+    update(); // paint immediately on render
+    _timeLineTimer = setInterval(update, 60_000);
 }
