@@ -99,6 +99,7 @@ export async function createTask(data) {
                 priority:    newTask.priority ?? 'medium',
                 startDate:   newTask.startDate ?? null,
                 deadline:    newTask.deadline ?? null,
+                ...(newTask.clientOpId && { clientOpId: newTask.clientOpId }),
                 ...(newTask.isRetroactive && {
                     isRetroactive: true,
                     completedAt:   newTask.completedAt,
@@ -124,6 +125,7 @@ export async function createTask(data) {
                 startDate:    newTask.startDate ?? null,
                 deadline:     newTask.deadline ?? null,
                 subtasks:     newTask.subtasks ?? [],
+                ...(newTask.clientOpId && { clientOpId: newTask.clientOpId }),
                 ...(newTask.isRetroactive && {
                     isRetroactive: true,
                     completedAt:   newTask.completedAt,

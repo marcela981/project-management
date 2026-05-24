@@ -14,6 +14,22 @@ import { save }        from '../core/storage.js';
 
 let currentTab    = 'edicion';
 let _formSnapshot = null;
+// In-flight guard for submitNewTask. Without this, rapid double-clicks fired
+// N parallel createTask() calls and the backend produced N duplicate cards.
+let _isSubmitting = false;
+// Idempotency key per "new task" modal session — paired with the unique
+// client_op_id column in the backend so a retry of the same create returns
+// the original row instead of inserting a duplicate.
+let _newTaskClientOpId = null;
+
+function _uuid() {
+    try {
+        if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+            return crypto.randomUUID();
+        }
+    } catch { /* fall through */ }
+    return `op-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${Math.random().toString(36).slice(2, 10)}`;
+}
 
 function _getFormState() {
     return {
@@ -71,8 +87,15 @@ export function openNewTaskModal(type) {
     document.getElementById('subtasksContainer').innerHTML = '';
 
     const submitBtn = document.querySelector('#modalNewTaskFooter .btn-primary');
-    if (submitBtn) submitBtn.innerHTML = '<i class="fas fa-check"></i> Create';
+    if (submitBtn) {
+        submitBtn.innerHTML = '<i class="fas fa-check"></i> Create';
+        submitBtn.disabled = false;
+    }
     document.getElementById('modalNewTaskFooter').style.display = 'flex';
+
+    // One idempotency key per modal session. All retries from the same modal
+    // open share it; closing and reopening generates a fresh one.
+    _newTaskClientOpId = _uuid();
 
     enableRetro();
     _formSnapshot = _getFormState();
@@ -564,6 +587,8 @@ export function addSubtaskInput() {
 // ── Submit (crear o editar tarea/actividad) ──────────────────────────────────
 
 export async function submitNewTask() {
+    if (_isSubmitting) return;
+
     const name = document.getElementById('inputTaskName').value.trim();
     if (!name) {
         alert('Name is required.');
@@ -584,7 +609,16 @@ export async function submitNewTask() {
         }));
 
     const isEditing = !!STATE.editingTaskId;
+    const submitBtn = document.querySelector('#modalNewTaskFooter .btn-primary');
+    const prevBtnHtml = submitBtn?.innerHTML ?? '';
 
+    _isSubmitting = true;
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving…';
+    }
+
+    try {
     if (isEditing) {
         const taskId = STATE.editingTaskId;
         const existingTask = STATE.tasks.find(t => t.id === taskId);
@@ -667,10 +701,9 @@ export async function submitNewTask() {
             ? document.getElementById('inputActivityType').value
             : null,
         subtasks,
+        clientOpId:   _newTaskClientOpId,
         ...retroFields,
     };
-
-    console.log('PAYLOAD ENVIADO:', JSON.stringify(payload, null, 2));
 
     try {
         await createTask(payload);
@@ -691,6 +724,13 @@ export async function submitNewTask() {
 
     renderBoard();
     closeModal('modalNewTask');
+    } finally {
+        _isSubmitting = false;
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = prevBtnHtml;
+        }
+    }
 }
 
 export async function confirmDeleteTask(taskId) {
