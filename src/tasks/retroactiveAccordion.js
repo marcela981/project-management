@@ -1,6 +1,19 @@
 /** Retroactive-completion accordion for task/activity/project creation. */
 
+import { fromZonedTime } from 'date-fns-tz';
+
 const TODAY = () => new Date().toISOString().split('T')[0];
+
+// completedAt semantically represents a calendar day in the business timezone
+// (America/New_York). Anchoring at NY midnight before serializing ensures the
+// backend receives a tz-aware ISO and stores the same calendar date the user
+// picked, independent of the browser's local timezone.
+const BUSINESS_TZ = 'America/New_York';
+
+function _completedAtToIso(dateOnly) {
+    if (!dateOnly) return null;
+    return fromZonedTime(`${dateOnly}T00:00:00`, BUSINESS_TZ).toISOString();
+}
 
 let _createMode  = false;
 let _startDate   = null;
@@ -41,7 +54,7 @@ export function disableRetro() {
 export function getRetroValues() {
     return {
         isActive:    _enabled,
-        completedAt: _enabled ? _completedAt : null,
+        completedAt: _enabled ? _completedAtToIso(_completedAt) : null,
         timeLogs:    _enabled ? _logs.map(l => ({ logDate: l.date, hours: l.hours })) : [],
     };
 }
