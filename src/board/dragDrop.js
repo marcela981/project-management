@@ -1,4 +1,5 @@
-/** Drag & drop en el kanban; reglas: una tarea en "Working Now", actividades solo en columna Activities. */
+/** Drag & drop en el kanban; reglas: una tarea en "Working Now" (swap automático
+ *  si está ocupada y la ocupante no tiene timer activo); actividades solo en columna Activities. */
 
 import { STATE }        from '../core/state.js';
 import { updateColumn } from '../api/api.js';
@@ -50,18 +51,31 @@ export function setupDragAndDrop() {
         const task = STATE.tasks.find(t => t.id === draggedTaskId);
         if (!task) return;
 
-        if (!_isValidMove(task, targetColumn)) return;
+        const occupant = targetColumn === 'working-now'
+            ? STATE.tasks.find(t => t.column === 'working-now' && t.id !== task.id)
+            : null;
+
+        if (!_isValidMove(task, targetColumn, occupant)) return;
+
+        // Swap: si "Working Right Now" ya tiene otra tarea, devolverla a
+        // "Actively Working" antes de colocar la arrastrada. La validación
+        // previa garantiza que la ocupante no tiene timer activo.
+        if (occupant) {
+            await updateColumn(occupant.id, 'actively-working');
+        }
 
         await updateColumn(draggedTaskId, targetColumn);
         renderBoard();
     });
 }
 
-function _isValidMove(task, targetColumn) {
-    if (targetColumn === 'working-now') {
-        const occupied = STATE.tasks.filter(t => t.column === 'working-now');
-        if (occupied.length > 0 && occupied[0].id !== task.id) {
-            alert('You can only have one task in "Working Right Now". Move the current one first.');
+function _isValidMove(task, targetColumn, occupant = null) {
+    if (targetColumn === 'working-now' && occupant) {
+        const occupantHasTimer = Object.values(STATE.timers).some(
+            t => t?.taskId === occupant.id
+        );
+        if (occupantHasTimer) {
+            alert('Aún estás realizando una tarea/proyecto. Por favor pausa tu tarea/proyecto actual antes de iniciar otra.');
             return false;
         }
     }
