@@ -3,7 +3,6 @@
 import { STATE }            from './core/state.js';
 import { load }             from './core/storage.js';
 import { fetchTasks, reopenTask, completeTask } from './api/api.js';
-import { drainPendingTimeOps } from './api/timeLogs.js';
 import {
     renderBoard, toggleCompletedAccordion,
     initBoardSortMenus, openSortMenu, closeSortMenus,
@@ -22,9 +21,7 @@ import { renderAdmin }      from './admin/admin.js';
 import {
     openNewTaskModal, openEditTaskModal,
     addSubtaskInput, submitNewTask, confirmDeleteTask,
-    switchTab, toggleSubtask, 
-    openAddTimeLog, cancelAddTimeLog, saveNewTimeLog, 
-    openEditTimeLog, cancelEditTimeLog, saveEditTimeLog, deleteTimeLogPrompt
+    switchTab, toggleSubtask,
 } from './tasks/taskForm.js';
 
 import {
@@ -160,15 +157,6 @@ async function handleClick(e) {
 
         case 'switch-tab':        switchTab(el.dataset.tab); break;
 
-        // Tiempo
-        case 'add-time-log':      openAddTimeLog(); break;
-        case 'cancel-new-time-log': cancelAddTimeLog(); break;
-        case 'save-new-time-log': saveNewTimeLog(); break;
-        case 'edit-time-log':     openEditTimeLog(el.dataset.logId); break;
-        case 'cancel-edit-time-log': cancelEditTimeLog(el.dataset.logId); break;
-        case 'save-edit-time-log': saveEditTimeLog(el.dataset.logId, el.dataset.logDate); break;
-        case 'delete-time-log':   deleteTimeLogPrompt(el.dataset.logId); break;
-
         // Reabrir tarea completada
         case 'reopen-task':       await reopenTask(taskId); renderBoard(); break;
 
@@ -302,7 +290,6 @@ async function init() {
 
     if (_currentUser) {
         setupNav(_currentUser, isTechTeam);
-        drainPendingTimeOps();
     }
 
     // Weekly tab is always available (no auth required)
@@ -310,11 +297,6 @@ async function init() {
         tab.addEventListener('click', () => navigateTo('weekly'));
     });
 
-    // Open the task/activity edit modal when the user clicks a time-log block in
-    // the Weekly view (source=task|activity). Dispatched by handleWeeklyClick.
-    window.addEventListener('weekly:open-source-item', e => {
-        openEditTaskModal(e.detail.id);
-    });
 
     document.addEventListener('click',  handleClick);
     document.addEventListener('change', handleChange);

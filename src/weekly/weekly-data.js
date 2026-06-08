@@ -1,7 +1,6 @@
 /** Capa de datos del weekly tracker: llamadas REST a /api/weekly. */
 
 import { startOfDay, getDay, subDays, addDays, format } from 'date-fns';
-import { formatInUserTz } from '../lib/time';
 import { expandBlocks } from '../calendar/recurrence/rrule-expander.js';
 import { getCachedUser } from '../auth/auth.js';
 import { pcGet, pcSet, pcDelete } from '../core/persistent-cache.js';
@@ -109,11 +108,8 @@ export async function savePreferences(prefs) {
 // ── Blocks ───────────────────────────────────────────────────────────────────
 
 async function _fetchBlocksFromNetwork(weekStartIsoDate) {
-    // Fetch manual/recurrence blocks and time-log entries in parallel.
-    const [list, unifiedList] = await Promise.all([
-        apiFetch(`/api/weekly/blocks?week_start=${weekStartIsoDate}`),
-        apiFetch(`/api/weekly/unified?week_start=${weekStartIsoDate}&_t=${Date.now()}`).catch(err => { console.error('[weekly] /unified failed:', err); return []; }),
-    ]);
+    // Fetch manual/recurrence (scheduling) blocks. Time-log blocks were removed.
+    const list = await apiFetch(`/api/weekly/blocks?week_start=${weekStartIsoDate}`);
     if (!Array.isArray(list)) return [];
 
     const normalized = list.map(_normalizeBlock);
@@ -130,17 +126,9 @@ async function _fetchBlocksFromNetwork(weekStartIsoDate) {
     const weekDays = getWeekDays(new Date(_y, _m - 1, _d), prefs);
     const virtual  = expandBlocks(masters, weekDays[0], weekDays[weekDays.length - 1]);
 
-    // Merge time-log blocks from /unified (source=task|activity only;
-    // source=manual would duplicate what /blocks already returns).
-    const logBlocks = Array.isArray(unifiedList)
-        ? unifiedList
-            .filter(b => b.source === 'task' || b.source === 'activity')
-            .map(b => _normalizeLogBlock(b, weekStartIsoDate))
-        : [];
-
-    // DEBUG — remove before merge (enable with ?debug=weekly in URL)
+    // DEBUG (enable with ?debug=weekly in URL)
     if (_debugWeekly()) {
-        console.log('[weekly-data] fetchBlocks incoming:', list.length, '| masters:', masters.length, '| concrete:', concrete.length, '| virtual:', virtual.length, '| logs:', logBlocks.length);
+        console.log('[weekly-data] fetchBlocks incoming:', list.length, '| masters:', masters.length, '| concrete:', concrete.length, '| virtual:', virtual.length);
         if (masters.length > 0) console.log('[weekly-data]   first master to expand:', JSON.stringify(masters[0]));
         if (virtual.length > 0) {
             const v = virtual[0];
@@ -148,7 +136,7 @@ async function _fetchBlocksFromNetwork(weekStartIsoDate) {
         }
     }
 
-    return [...concrete, ...virtual.map(_normalizeBlock), ...logBlocks];
+    return [...concrete, ...virtual.map(_normalizeBlock)];
 }
 
 function _refreshBlocks(weekStartIsoDate) {
@@ -320,52 +308,6 @@ export async function removeBlock(blockId, scope = null) {
         alert(`No se pudo eliminar el bloque: ${e.message}`);
         return false;
     }
-}
-
-// Converts a WeeklyBlockUnified entry (source=task|activity) to the display shape.
-// start_at is a UTC ISO 8601 string with Z suffix; converted to user's local timezone.
-function _normalizeLogBlock(b, weekStartIsoDate) {
-    let startTime = formatInUserTz(b.start_at, 'HH:mm');
-    const localDate = formatInUserTz(b.start_at, 'yyyy-MM-dd');
-    if (startTime < '06:00') {
-        console.warn('[weekly] log block before 06:00 (possible start_at NULL fallback):', b.id, b.start_at);
-        startTime = '06:00';
-    }
-
-    // Compute end by adding duration, then clamp if it crosses midnight in user's TZ.
-    const endMs    = new Date(b.start_at).getTime() + b.duration_minutes * 60_000;
-    const endIso   = new Date(endMs).toISOString();
-    const endDay   = formatInUserTz(endIso, 'yyyy-MM-dd');
-    const endTime  = endDay > localDate ? '23:59' : formatInUserTz(endIso, 'HH:mm');
-
-    const isTask = b.source === 'task';
-    return {
-        id:               b.id,
-        week_start:       weekStartIsoDate,
-        day:              new Date(b.start_at).getDay(),  // local day of week (0=Sun)
-        block_type:       isTask ? 'task' : 'activity',
-        task_id:          isTask ? b.source_ref_id : null,
-        activity_id:      isTask ? null : b.source_ref_id,
-        title:            b.title,
-        color:            b.color ?? null,
-        start_time:       startTime,
-        end_time:         endTime,
-        notes:            null,
-        priority:         b.metadata?.priority ?? null,
-        column_status:    b.metadata?.column_status ?? null,
-        item_type:        b.metadata?.activity_type ?? null,
-        is_virtual:       false,
-        is_master:        false,
-        series_id:        null,
-        recurrence:       null,
-        recurrence_until: null,
-        rrule_string:     null,
-        dtstart:          null,
-        exception_dates:  [],
-        parent_block_id:  null,
-        source:           b.source,
-        is_log:           true,
-    };
 }
 
 function _normalizeBlock(b) {

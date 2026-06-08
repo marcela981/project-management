@@ -2,7 +2,7 @@
 
 import { STATE }      from '../core/state.js';
 import { updateKPIs } from '../kpi/kpi.js';
-import { formatTime, formatDate, isOverdue, getActivityTypeLabel, formatTimeCompact, formatLogDate, formatRelativeTime, formatTimeOfDay } from '../shared/utils.js';
+import { formatDate, isOverdue, getActivityTypeLabel, formatRelativeTime, formatTimeOfDay } from '../shared/utils.js';
 import {
     sortItems, getSort, setSort, resetSort, isDefaultSort,
     CRITERIA_ACTIVE, CRITERIA_COMPLETED,
@@ -359,9 +359,6 @@ export function createTaskCard(task) {
                 <span class="task-meta-item ${overdueClass} ${completeClass}">
                     <i class="fas fa-calendar"></i>${formatDate(task.deadline)}
                 </span>` : ''}
-            <span class="task-meta-item">
-                <i class="fas fa-clock"></i>${formatTime(task.timeSpent)}
-            </span>
             ${totalCount > 0 ? `
                 <span class="task-meta-item ${completeClass}">
                     <i class="fas fa-check-square"></i>${completedCount}/${totalCount}
@@ -383,17 +380,6 @@ export function createTaskCard(task) {
                 <span class="task-tag">
                     <i class="fas fa-tag"></i> ${getActivityTypeLabel(task.activityType)}
                 </span>
-            </div>` : ''}
-        ${task.timeLog && task.timeLog.length > 0 ? `
-            <div class="time-log">
-                ${[...task.timeLog]
-                    .sort((a, b) => b.date.localeCompare(a.date))
-                    .slice(0, 5)
-                    .map(entry => `
-                        <div class="time-log-entry">
-                            <span class="time-log-date">${formatLogDate(entry.date)}</span>
-                            <span class="time-log-duration">${formatTimeCompact(entry.seconds)}</span>
-                        </div>`).join('')}
             </div>` : ''}
     `;
 
