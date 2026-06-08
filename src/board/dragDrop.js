@@ -55,7 +55,7 @@ export function setupDragAndDrop() {
             ? STATE.tasks.find(t => t.column === 'working-now' && t.id !== task.id)
             : null;
 
-        if (!_isValidMove(task, targetColumn, occupant)) return;
+        if (!_isValidMove(task, targetColumn)) return;
 
         // Swap: si "Working Right Now" ya tiene otra tarea, devolverla a
         // "Actively Working" antes de colocar la arrastrada. La validación
@@ -69,17 +69,7 @@ export function setupDragAndDrop() {
     });
 }
 
-function _isValidMove(task, targetColumn, occupant = null) {
-    if (targetColumn === 'working-now' && occupant) {
-        const occupantHasTimer = Object.values(STATE.timers).some(
-            t => t?.taskId === occupant.id
-        );
-        if (occupantHasTimer) {
-            alert('Aún estás realizando una tarea/proyecto. Por favor pausa tu tarea/proyecto actual antes de iniciar otra.');
-            return false;
-        }
-    }
-
+function _isValidMove(task, targetColumn) {
     if (task.type === 'activity' && targetColumn !== 'activities') {
         alert('Activities can only be placed in the "Activities" column.');
         return false;

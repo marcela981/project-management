@@ -303,9 +303,6 @@ function _priorityLabel(priority) {
 }
 
 export function createTaskCard(task) {
-    const type          = task.type;
-    const isActiveTimer = STATE.timers[type]?.taskId === task.id;
-    const timer         = STATE.timers[type];
     const completedCount  = task.subtasks.filter(s => s.completed).length;
     const totalCount      = task.subtasks.length;
     const progressPercent = task.progress
@@ -317,31 +314,11 @@ export function createTaskCard(task) {
     const completeClass = isComplete ? 'complete' : '';
 
     const card = document.createElement('div');
-    card.className = ['task-card', overdueClass, completeClass, isActiveTimer ? 'active-timer' : '']
+    card.className = ['task-card', overdueClass, completeClass]
         .filter(Boolean)
         .join(' ');
     card.draggable = !isComplete;
     card.dataset.taskId = task.id;
-
-    const showTimer          = (task.column === 'working-now' || task.column === 'activities') && !isComplete;
-    const showSubtaskSelector = showTimer && task.type !== 'activity';
-
-    const activeSubtaskId = isActiveTimer ? timer.subtaskId : null;
-    const activeSubtask   = activeSubtaskId && activeSubtaskId !== 'none'
-        ? task.subtasks.find(s => s.id === activeSubtaskId)
-        : null;
-
-    const savedSubId = STATE.selectedSubtasks[task.id];
-    const subtaskOptions = [
-        `<option value="none"${!savedSubId || savedSubId === 'none' ? ' selected' : ''}>-- No specific subtask --</option>`,
-        ...task.subtasks
-            .filter(s => !s.completed)
-            .map(s => `<option value="${s.id}"${savedSubId === s.id ? ' selected' : ''}>${s.text}</option>`)
-    ].join('');
-
-    const timerSeconds = isActiveTimer
-        ? timer.accumulated + Math.floor((Date.now() - timer.startTime) / 1000)
-        : task.timeSpent;
 
     card.innerHTML = `
         <div class="task-priority ${task.priority}"></div>
@@ -399,32 +376,6 @@ export function createTaskCard(task) {
                 <div class="progress-bar">
                     <div class="progress-fill ${isComplete ? 'complete' : ''}"
                          style="width: ${progressPercent}%"></div>
-                </div>
-            </div>` : ''}
-        ${showTimer ? `
-            ${showSubtaskSelector ? `
-            <div class="subtask-selector">
-                <label>Working on:</label>
-                ${isActiveTimer
-                    ? `<div class="active-subtask-name">${activeSubtask ? activeSubtask.text : '<span class="no-subtask">— General task —</span>'}</div>`
-                    : `<select data-action="select-subtask" data-task-id="${task.id}">${subtaskOptions}</select>`
-                }
-            </div>` : ''}
-            <div class="task-timer">
-                <span class="timer-display ${isActiveTimer ? 'running' : ''}" id="timer-${task.id}">
-                    ${formatTime(timerSeconds)}
-                </span>
-                <div class="timer-controls">
-                    ${isActiveTimer ? `
-                        <button class="timer-btn pause" data-action="pause-timer" data-task-id="${task.id}" title="Pause">
-                            <i class="fas fa-pause"></i>
-                        </button>
-                        <button class="timer-btn stop" data-action="stop-timer" data-task-id="${task.id}" title="Finish">
-                            <i class="fas fa-check"></i>
-                        </button>` : `
-                        <button class="timer-btn start" data-action="start-timer" data-task-id="${task.id}" title="Start">
-                            <i class="fas fa-play"></i>
-                        </button>`}
                 </div>
             </div>` : ''}
         ${task.type === 'activity' ? `

@@ -3,7 +3,6 @@
 import { CONFIG } from '../core/config.js';
 import { getToken, logout, refreshAccessToken } from '../auth/auth.js';
 import { generateId } from '../shared/utils.js';
-import { flushActiveTimers } from '../timer/timerFlush.js';
 
 const PENDING_OPS_KEY = 'pendingTimeOps';
 const RETRY_DELAYS = [500, 1500, 3000];
@@ -63,7 +62,6 @@ async function fetchWithRetry(url, options, clientOpId = null, retries = 3) {
                     } catch { /* cae a logout */ }
                 }
                 console.warn('[auth] refresh failed, logging out.');
-                flushActiveTimers();
                 logout();
                 return null;
             }

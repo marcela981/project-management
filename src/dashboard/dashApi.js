@@ -2,7 +2,6 @@
 
 import { getToken, logout }  from '../auth/auth.js';
 import { CONFIG }            from '../core/config.js';
-import { flushActiveTimers } from '../timer/timerFlush.js';
 
 async function apiFetch(path, options = {}) {
     const token = getToken();
@@ -13,7 +12,7 @@ async function apiFetch(path, options = {}) {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
     });
-    if (res.status === 401) { flushActiveTimers(); logout(); return null; }
+    if (res.status === 401) { logout(); return null; }
     if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
     const text = await res.text();
     return text ? JSON.parse(text) : null;

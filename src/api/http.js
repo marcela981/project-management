@@ -2,12 +2,11 @@
 
 import { CONFIG } from '../core/config.js';
 import { getToken, logout, refreshAccessToken, shouldRefreshSoon } from '../auth/auth.js';
-import { flushActiveTimers } from '../timer/timerFlush.js';
 
 /**
  * Low-level authenticated fetch. Injects Authorization header; on 401 tries
  * a silent token refresh and retries once. On double-401 or refresh failure,
- * flushes timers and calls logout(), then returns null.
+ * calls logout() and returns null.
  */
 export async function authedFetch(url, opts = {}) {
     await shouldRefreshSoon();
@@ -27,12 +26,10 @@ export async function authedFetch(url, opts = {}) {
         const newToken = await refreshAccessToken();
         res = await doFetch(newToken);
         if (res.status === 401) {
-            flushActiveTimers();
             logout();
             return null;
         }
     } catch {
-        flushActiveTimers();
         logout();
         return null;
     }
