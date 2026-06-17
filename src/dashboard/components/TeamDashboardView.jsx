@@ -1,11 +1,9 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useDateRange } from '../hooks/useDateRange.js';
 import { fetchTeams, fetchTeamMetrics, fetchDeliveryTrend } from '../dashApi.js';
-import { onTimeLogChanged } from '../../core/events.js';
 import PeriodSelector from './PeriodSelector.jsx';
 import KpiCard from './KpiCard.jsx';
 import { AreaChart, DoughnutChart } from './Charts.jsx';
-import CapacityHeatmap from './CapacityHeatmap.jsx';
 
 function initials(name) {
     return (name || '?').trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
@@ -80,7 +78,6 @@ export default function TeamDashboardView({ user }) {
     const [teams, setTeams]                   = useState([]);
     const [teamData, setTeamData]             = useState(null);
     const [metricsLoading, setMetricsLoading] = useState(false);
-    const [refreshToken, setRefreshToken]     = useState(0);
     const metricsLoadingRef                   = useRef(false);
 
     const [trendTeams, setTrendTeams]     = useState({ labels: [], series: [] });
@@ -94,13 +91,6 @@ export default function TeamDashboardView({ user }) {
 
     useEffect(() => {
         fetchTeams().then(data => setTeams(data ?? [])).catch(() => {});
-    }, []);
-
-    useEffect(() => {
-        return onTimeLogChanged(() => {
-            if (metricsLoadingRef.current) return;
-            setRefreshToken(n => n + 1);
-        });
     }, []);
 
     // Sync activeRange immediately for non-custom periods
@@ -166,7 +156,7 @@ export default function TeamDashboardView({ user }) {
                 setMetricsLoading(false);
                 metricsLoadingRef.current = false;
             });
-    }, [selectedTeam, activeRange.start, activeRange.end, teams, refreshToken]);
+    }, [selectedTeam, activeRange.start, activeRange.end, teams]);
 
     const memberMetrics = teamData?.memberMetrics ?? [];
 
@@ -176,14 +166,13 @@ export default function TeamDashboardView({ user }) {
     }, [memberMetrics, selectedMember]);
 
     const kpis = useMemo(() => {
-        if (!teamData) return { total: 0, completionRate: 0, hoursWorked: 0, avgIel: 0 };
+        if (!teamData) return { total: 0, completionRate: 0, avgIel: 0 };
 
         if (selectedMember !== 'all' && filteredMetrics.length > 0) {
             const m = filteredMetrics[0];
             return {
                 total:          m.completedTasks ?? 0,
                 completionRate: m.completionRate ?? 0,
-                hoursWorked:    m.hoursWorked ?? 0,
                 avgIel:         m.iel ?? 0,
             };
         }
@@ -192,7 +181,6 @@ export default function TeamDashboardView({ user }) {
         return {
             total:          src.reduce((s, m) => s + (m.completedTasks ?? 0), 0),
             completionRate: src.length ? src.reduce((s, m) => s + (m.completionRate ?? 0), 0) / src.length : 0,
-            hoursWorked:    src.reduce((s, m) => s + (m.hoursWorked ?? 0), 0),
             avgIel:         src.length ? src.reduce((s, m) => s + (m.iel ?? 0), 0) / src.length : 0,
         };
     }, [teamData, memberMetrics, filteredMetrics, selectedMember]);
@@ -228,28 +216,6 @@ export default function TeamDashboardView({ user }) {
             data:   entries.map(([, c]) => c),
         };
     }, [teamData, memberMetrics, filteredMetrics, selectedMember]);
-
-    const capacity = useMemo(() => {
-        const DAY_MAP = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie' };
-        const today    = new Date().toISOString().split('T')[0];
-        const capStart = activeRange.start;
-        const capEnd   = activeRange.end < today ? activeRange.end : today;
-
-        const result = {};
-        for (const m of memberMetrics) {
-            const accum = {};
-            for (const [dateStr, seconds] of Object.entries(m.deepWorkByDay ?? {})) {
-                if (dateStr < capStart || dateStr > capEnd) continue;
-                const dayName = DAY_MAP[new Date(`${dateStr}T12:00:00`).getDay()];
-                if (!dayName) continue;
-                accum[dayName] = (accum[dayName] ?? 0) + seconds;
-            }
-            result[m.userId] = Object.fromEntries(
-                Object.entries(accum).map(([day, secs]) => [day, Math.round((secs / 3600) * 10) / 10])
-            );
-        }
-        return result;
-    }, [memberMetrics, activeRange.start, activeRange.end]);
 
     // Chart B: teams by default; drill-down to members when a team or member is selected
     useEffect(() => {
@@ -369,10 +335,6 @@ export default function TeamDashboardView({ user }) {
                     value={hasData && !metricsLoading ? `${Math.round(kpis.completionRate)}%` : '—'}
                     label="Tasa de Cumplimiento"
                 />
-                <KpiCard color="warning" icon="fa-hourglass-half"
-                    value={hasData && !metricsLoading ? `${kpis.hoursWorked}h` : '—'}
-                    label="Horas Trabajadas"
-                />
                 <KpiCard color="purple" icon="fa-bolt"
                     value={hasData && !metricsLoading ? kpis.avgIel.toFixed(1) : '—'}
                     label="Efectividad Promedio (IEL)"
@@ -410,26 +372,13 @@ export default function TeamDashboardView({ user }) {
                 </div>
             </div>
 
-            {/* Row 3 – Doughnut + Heatmap */}
-            <div className="charts-grid mx" style={{ gridTemplateColumns: '2fr 3fr' }}>
+            {/* Row 3 – Doughnut */}
+            <div className="charts-grid mx">
                 <div className="chart-card">
                     <h3 className="chart-title">
                         <i className="fas fa-chart-pie" /> Distribución por Estado
                     </h3>
                     <DoughnutChart labels={statusChart.labels} data={statusChart.data} />
-                </div>
-
-                <div className="chart-card">
-                    <h3 className="chart-title">
-                        <i className="fas fa-fire" /> Mapa de Calor – Capacidad Semanal
-                    </h3>
-                    <p className="text-muted text-sm" style={{ marginTop: '-0.25rem', marginBottom: '0.75rem' }}>
-                        Horas trabajadas por día. Asigna tareas urgentes a quien tenga menor carga.
-                    </p>
-                    <CapacityHeatmap
-                        members={filteredMetrics}
-                        capacity={capacity}
-                    />
                 </div>
             </div>
 
@@ -445,7 +394,6 @@ export default function TeamDashboardView({ user }) {
                                 <th>Miembro</th>
                                 <th>Tareas Completadas</th>
                                 <th>Tasa de Cumplimiento</th>
-                                <th>Horas Trabajadas</th>
                                 <th>IEL</th>
                                 <th>SLA Prom. (días)</th>
                             </tr>
@@ -453,7 +401,7 @@ export default function TeamDashboardView({ user }) {
                         <tbody>
                             {metricsLoading && (
                                 <tr>
-                                    <td colSpan={6} style={{ textAlign: 'center', padding: '2rem' }}>
+                                    <td colSpan={5} style={{ textAlign: 'center', padding: '2rem' }}>
                                         <i className="fas fa-spinner fa-spin" style={{ marginRight: '0.5rem' }} />
                                         Cargando métricas...
                                     </td>
@@ -461,7 +409,7 @@ export default function TeamDashboardView({ user }) {
                             )}
                             {!metricsLoading && !hasData && (
                                 <tr>
-                                    <td colSpan={6} style={{ textAlign: 'center', padding: '2rem' }}>
+                                    <td colSpan={5} style={{ textAlign: 'center', padding: '2rem' }}>
                                         {teams.length === 0
                                             ? 'Cargando equipos...'
                                             : 'No hay datos para el período seleccionado.'}
@@ -478,14 +426,13 @@ export default function TeamDashboardView({ user }) {
                                     </td>
                                     <td>{m.completedTasks ?? 0}</td>
                                     <td><RateBadge rate={m.completionRate} /></td>
-                                    <td>{m.hoursWorked != null ? `${m.hoursWorked}h` : '—'}</td>
                                     <td>{m.iel != null ? m.iel.toFixed(1) : '—'}</td>
                                     <td>{m.slaAvgDays != null ? m.slaAvgDays.toFixed(1) : '—'}</td>
                                 </tr>
                             ))}
                             {!metricsLoading && hasData && filteredMetrics.length === 0 && (
                                 <tr>
-                                    <td colSpan={6} style={{ textAlign: 'center', padding: '2rem' }}>
+                                    <td colSpan={5} style={{ textAlign: 'center', padding: '2rem' }}>
                                         Sin datos para los filtros seleccionados.
                                     </td>
                                 </tr>

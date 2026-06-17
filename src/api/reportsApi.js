@@ -2,7 +2,6 @@
 
 import { CONFIG } from '../core/config.js';
 import { getToken, refreshAccessToken, logout } from '../auth/auth.js';
-import { flushActiveTimers } from '../timer/timerFlush.js';
 
 const EXPORT_URL = `${CONFIG.BACKEND_BASE_URL}/api/v1/reports/performance/export`;
 
@@ -32,13 +31,11 @@ export async function exportPerformanceReport(request, signal) {
             const newToken = await refreshAccessToken();
             res = await doFetch(newToken);
         } catch {
-            flushActiveTimers();
             logout();
             throw new Error('Session expired — please log in again.');
         }
 
         if (res.status === 401) {
-            flushActiveTimers();
             logout();
             throw new Error('Session expired — please log in again.');
         }

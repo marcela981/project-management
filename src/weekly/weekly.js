@@ -173,16 +173,6 @@ export function handleWeeklyClick(action, el) {
             }
             return true;
         }
-        case 'weekly-open-log': {
-            const sourceRef  = el.dataset.sourceRef;
-            const sourceType = el.dataset.sourceType;
-            if (sourceRef) {
-                window.dispatchEvent(new CustomEvent('weekly:open-source-item', {
-                    detail: { id: sourceRef, sourceType },
-                }));
-            }
-            return true;
-        }
     }
     return false;
 }
@@ -562,27 +552,8 @@ function _renderColumn(date, blocks, today, bizHours, events = []) {
     const loadPct    = Math.min(100, Math.round((h / 8) * 100));
     const overloaded = h > 10 ? 'overloaded' : '';
 
-    // Split by type and compute layouts independently so planned and log
-    // blocks never steal columns from each other.
-    const plannedBlocks = colBlocks.filter(b => !b.is_log);
-    const logBlocks     = colBlocks.filter(b =>  b.is_log);
+    const plannedBlocks = colBlocks;
     const plannedLayout = computeBlockLayout(plannedBlocks);
-    const logLayout     = computeBlockLayout(logBlocks);
-
-    // Detect perfect matches (same title + exact time range → "Cumplido")
-    const matchedLogIds     = new Set();
-    const matchedPlannedIds = new Set();
-    for (const log of logBlocks) {
-        const match = plannedBlocks.find(p =>
-            p.start_time === log.start_time &&
-            p.end_time   === log.end_time   &&
-            p.title      === log.title
-        );
-        if (match) {
-            matchedLogIds.add(log.id);
-            matchedPlannedIds.add(match.id);
-        }
-    }
 
     const totalSlots = HOUR_END - _gridHourStart + 1;
     const gridHeight = totalSlots * PX_PER_HOUR;
@@ -609,10 +580,6 @@ function _renderColumn(date, blocks, today, bizHours, events = []) {
     const eventTrackHtml = renderEventTrack(events, date);
     const hasEventsClass = events.length > 0 ? ' has-events' : '';
 
-    // When only one track type has blocks it expands to full column width.
-    const plannedFull = logBlocks.length     === 0 ? ' weekly-blocks-track--full' : '';
-    const logFull     = plannedBlocks.length === 0 ? ' weekly-blocks-track--full' : '';
-
     return `
         <div class="weekly-col" data-day="${dn}">
             <div class="weekly-col-header${isToday ? ' today' : ''}">
@@ -630,11 +597,8 @@ function _renderColumn(date, blocks, today, bizHours, events = []) {
                 ${hourLines}
                 ${eventTrackHtml}
                 ${!hasBlocks ? '<div class="weekly-no-blocks-text"><i class="fas fa-calendar-plus"></i><br>Sin bloques planeados</div>' : ''}
-                <div class="weekly-blocks-track weekly-blocks-track--planned${plannedFull}" data-day="${dn}">
-                    ${plannedBlocks.map(b => _renderBlock(b, plannedLayout.get(b.id), { isMatch: matchedPlannedIds.has(b.id) })).join('')}
-                </div>
-                <div class="weekly-blocks-track weekly-blocks-track--log${logFull}" data-day="${dn}">
-                    ${logBlocks.map(b => _renderLogBlock(b, logLayout.get(b.id), { isMatch: matchedLogIds.has(b.id) })).join('')}
+                <div class="weekly-blocks-track weekly-blocks-track--planned weekly-blocks-track--full" data-day="${dn}">
+                    ${plannedBlocks.map(b => _renderBlock(b, plannedLayout.get(b.id))).join('')}
                 </div>
             </div>
             <div class="weekly-col-footer">
@@ -663,46 +627,7 @@ function _renderBusinessHoursLabel(bizHours) {
 
 // ── Block ────────────────────────────────────────────────────────────────────
 
-function _renderLogBlock(block, blockLayout = { column: 0, totalColumns: 1 }, opts = {}) {
-    const { column, totalColumns } = blockLayout;
-    const top    = Math.max(0, timeToMinutes(block.start_time) - _gridHourStart * 60);
-    const height = Math.max(24, timeToMinutes(block.end_time) - timeToMinutes(block.start_time));
-    const durH   = blockDurationH(block);
-    const title  = block.title || 'Log';
-    const isTask = block.block_type === 'task';
-    const sourceRef  = isTask ? block.task_id : block.activity_id;
-    const sourceType = block.source ?? block.block_type;
-
-    const priorityCls = `priority-${block.priority ?? 'medium'}`;
-    const posStyle    = totalColumns === 1
-        ? 'left:4px;right:4px;'
-        : `left:calc(${(column / totalColumns * 100).toFixed(2)}% + 2px);width:calc(${(100 / totalColumns).toFixed(2)}% - 4px);right:auto;`;
-
-    const isMatch    = opts.isMatch ?? false;
-    const badgeLabel = isMatch ? 'Cumplido' : 'Ejecutado';
-    const badgeCls   = isMatch ? 'weekly-block-badge--fulfilled' : 'weekly-block-badge--log';
-    const matchCls   = isMatch ? ' weekly-block--fulfilled' : '';
-
-    return `
-        <div class="weekly-block weekly-block--log task-block ${priorityCls}${matchCls}"
-             style="top:${top}px;height:${height}px;${posStyle}"
-             data-action="weekly-open-log"
-             data-block-id="${block.id}"
-             data-source-ref="${_esc(sourceRef ?? '')}"
-             data-source-type="${_esc(sourceType)}"
-             title="Log de tiempo: ${_esc(title)}">
-            ${height >= 32 ? `<span class="weekly-block-badge ${badgeCls}">${badgeLabel}</span>` : ''}
-            <div class="weekly-block-title">
-                <i class="fas fa-clock" style="font-size:.5625rem;margin-right:2px;opacity:.6"></i>${_esc(title)}
-            </div>
-            ${height >= 40
-                ? `<div class="weekly-block-time">${block.start_time}–${block.end_time} · ${durH}h</div>`
-                : ''}
-        </div>`;
-}
-
 function _renderBlock(block, blockLayout = { column: 0, totalColumns: 1 }, opts = {}) {
-    if (block.is_log) return _renderLogBlock(block, blockLayout, opts);
     const { column, totalColumns } = blockLayout;
     const top        = Math.max(0, timeToMinutes(block.start_time) - _gridHourStart * 60);
     const height     = Math.max(24, timeToMinutes(block.end_time) - timeToMinutes(block.start_time));
@@ -1076,7 +1001,6 @@ function _renderWeekProgress(days) {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function _blockVisible(block) {
-    if (block.is_log) return true;  // pre-filtered by the /unified backend service
     // El backend ya filtra tareas completadas/eliminadas. En personales siempre visible.
     if (block.block_type === 'personal') return true;
 
@@ -1111,7 +1035,7 @@ function _esc(str) {
  *   - Week navigation: _render() clears _timeLineTimer before calling this again.
  *   - Outside grid hours: line is removed when current hour < _gridHourStart.
  *
- * Formula (mirrors block positioning in _renderBlock / _renderLogBlock):
+ * Formula (mirrors block positioning in _renderBlock):
  *   topPx = (currentHour - _gridHourStart) * PX_PER_HOUR + currentMinute
  * With PX_PER_HOUR = 60, 1 minute = 1 pixel.
  */

@@ -10,7 +10,7 @@
  * footprint so consecutive short blocks don't paint over each other.
  */
 
-// Must match the `Math.max(24, duration)` floor in _renderLogBlock / _renderBlock.
+// Must match the `Math.max(24, duration)` floor in _renderBlock.
 // With PX_PER_HOUR = 60 (1 min = 1 px) a 24-px floor equals 24 visual minutes.
 const MIN_BLOCK_MINUTES = 24;
 

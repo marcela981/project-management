@@ -31,60 +31,11 @@ export async function fetchTasks() {
     ];
 }
 
-export async function saveTime(taskId, timeSpent, subtaskId = null, feedback = null, sessionStartAt = null) {
-    if (CONFIG.BACKEND_URL) {
-        const endpoint = _isActivity(taskId)
-            ? `/api/proyectos/activities/${taskId}/time`
-            : `/api/proyectos/tareas/${taskId}/time`;
-
-        const task = STATE.tasks.find(t => t.id === taskId);
-        const absoluteTime = (task?.timeSpent ?? 0) + timeSpent;
-
-        // Backend schema field is `startAt` (TimeRecord.startAt). Mismatched
-        // names made every save drop into the legacy merge-by-day path, so two
-        // separate sessions for the same task collapsed into a single row.
-        await apiFetch(endpoint, {
-            method: 'POST',
-            body: JSON.stringify({ timeSpent, subtaskId, feedback, absoluteTime, startAt: sessionStartAt }),
-        });
-    }
-
-    const task = STATE.tasks.find(t => t.id === taskId);
-    if (!task) return;
-
-    task.timeSpent += timeSpent;
-
-    if (!task.timeLog) task.timeLog = [];
-    const today = new Date().toISOString().split('T')[0];
-    const logEntry = task.timeLog.find(e => e.date === today);
-    if (logEntry) {
-        logEntry.seconds += timeSpent;
-    } else {
-        task.timeLog.push({ date: today, seconds: timeSpent });
-    }
-
-    if (subtaskId && subtaskId !== 'none') {
-        const sub = task.subtasks.find(s => s.id === subtaskId);
-        if (sub) sub.timeSpent += timeSpent;
-    }
-
-    if (feedback) {
-        if (feedback.progress !== undefined) task.progress = feedback.progress;
-        if (feedback.observation) {
-            task.observations.push({ date: new Date().toISOString(), text: feedback.observation });
-        }
-    }
-
-    save();
-}
-
 export async function createTask(data) {
     const newTask = {
         id:           generateId('task'),
         createdAt:    new Date().toISOString(),
         progress:     0,
-        timeSpent:    0,
-        timeLog:      [],
         observations: [],
         subtasks:     [],
         ...data,
@@ -104,7 +55,6 @@ export async function createTask(data) {
                     isRetroactive: true,
                     completedAt:   newTask.completedAt,
                     progress:      newTask.progress ?? 100,
-                    timeLogs:      newTask.timeLogs ?? [],
                 }),
             };
             const saved = await apiFetch('/api/proyectos/activities', {
@@ -130,7 +80,6 @@ export async function createTask(data) {
                     isRetroactive: true,
                     completedAt:   newTask.completedAt,
                     progress:      newTask.progress ?? 100,
-                    timeLogs:      newTask.timeLogs ?? [],
                 }),
             };
             const saved = await apiFetch('/api/proyectos/tareas', {

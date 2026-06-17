@@ -3,7 +3,6 @@
 import { STATE }            from './core/state.js';
 import { load }             from './core/storage.js';
 import { fetchTasks, reopenTask, completeTask } from './api/api.js';
-import { drainPendingTimeOps } from './api/timeLogs.js';
 import {
     renderBoard, toggleCompletedAccordion,
     initBoardSortMenus, openSortMenu, closeSortMenus,
@@ -22,9 +21,7 @@ import { renderAdmin }      from './admin/admin.js';
 import {
     openNewTaskModal, openEditTaskModal,
     addSubtaskInput, submitNewTask, confirmDeleteTask,
-    switchTab, toggleSubtask, 
-    openAddTimeLog, cancelAddTimeLog, saveNewTimeLog, 
-    openEditTimeLog, cancelEditTimeLog, saveEditTimeLog, deleteTimeLogPrompt
+    switchTab, toggleSubtask,
 } from './tasks/taskForm.js';
 
 import {
@@ -33,7 +30,6 @@ import {
     toggleDeckFilterPanel, toggleDeckTag, selectAllDeckTags, clearAllDeckTags,
 } from './deck/deckImport.js';
 
-import { confirmCompletion } from './timer/completionModal.js';
 import { renderCalendar, handleCalendarClick } from './calendar/calendar-router.js';
 import { submitBlock, handleWeeklyModalEvent } from './weekly/weekly-modal.js';
 import { pcGet } from './core/persistent-cache.js';
@@ -42,13 +38,6 @@ import {
 } from './weekly/weekly-data.js';
 import { initRetroAccordion } from './tasks/retroactiveAccordion.js';
 import { openSettings, closeSettings, saveSettings } from './settings/settings.js';
-
-import {
-    startTimer, pauseTimer, stopTimer, cancelPause, confirmPause,
-    closeTimerNotif, timerNotifNo, closeTimerAction, timerActionFinalize, timerActionStop,
-    cancelCompletion, restoreTimers,
-} from './timer/timer.js';
-import { flushActiveTimers } from './timer/timerFlush.js';
 
 // ---------------------------------------------------------------------------
 // Navegación entre vistas
@@ -130,14 +119,6 @@ function setupNav(user, isTechTeam) {
 }
 
 // ---------------------------------------------------------------------------
-// Funciones locales
-// ---------------------------------------------------------------------------
-
-function setSubtaskSelection(taskId, subtaskId) {
-    STATE.selectedSubtasks[taskId] = subtaskId;
-}
-
-// ---------------------------------------------------------------------------
 // Event delegation: un único listener maneja toda la UI
 // ---------------------------------------------------------------------------
 
@@ -152,7 +133,7 @@ async function handleClick(e) {
     const el = e.target.closest('[data-action]');
     if (!el) return;
 
-    const { action, taskId, subtaskId, modalId, type, elapsed, deckId } = el.dataset;
+    const { action, taskId, subtaskId, modalId, type, deckId } = el.dataset;
 
     switch (action) {
         case 'toggle-task-menu': {
@@ -175,31 +156,6 @@ async function handleClick(e) {
         case 'remove-parent':     el.parentElement.remove(); break;
 
         case 'switch-tab':        switchTab(el.dataset.tab); break;
-
-        // Tiempo
-        case 'add-time-log':      openAddTimeLog(); break;
-        case 'cancel-new-time-log': cancelAddTimeLog(); break;
-        case 'save-new-time-log': saveNewTimeLog(); break;
-        case 'edit-time-log':     openEditTimeLog(el.dataset.logId); break;
-        case 'cancel-edit-time-log': cancelEditTimeLog(el.dataset.logId); break;
-        case 'save-edit-time-log': saveEditTimeLog(el.dataset.logId, el.dataset.logDate); break;
-        case 'delete-time-log':   deleteTimeLogPrompt(el.dataset.logId); break;
-
-        // Timer
-        case 'start-timer':       startTimer(taskId); break;
-        case 'pause-timer':       pauseTimer(taskId); break;
-        case 'stop-timer':        await stopTimer(taskId); break;
-        case 'cancel-pause':       cancelPause(taskId); break;
-        case 'confirm-pause':      await confirmPause(taskId, parseInt(elapsed, 10)); break;
-        case 'confirm-completion': await confirmCompletion(taskId, parseInt(elapsed, 10), subtaskId, el.dataset.sessionStart || null); break;
-        case 'cancel-completion':  cancelCompletion(taskId); break;
-
-        // Notificaciones de timer
-        case 'close-timer-notif': closeTimerNotif(); break;
-        case 'timer-notif-no':    await timerNotifNo(taskId, type); break;
-        case 'close-timer-action': closeTimerAction(); break;
-        case 'timer-finalize':    await timerActionFinalize(taskId, type); break;
-        case 'timer-stop':        timerActionStop(taskId, type); break;
 
         // Reabrir tarea completada
         case 'reopen-task':       await reopenTask(taskId); renderBoard(); break;
@@ -268,9 +224,8 @@ async function handleClick(e) {
 function handleChange(e) {
     const el = e.target.closest('[data-action]');
     if (!el) return;
-    const { action, taskId } = el.dataset;
+    const { action } = el.dataset;
     switch (action) {
-        case 'select-subtask':    setSubtaskSelection(taskId, el.value); break;
         case 'select-deck-board': selectDeckBoard(el.value); break;
     }
 }
@@ -329,14 +284,12 @@ async function init() {
     await Promise.all(promises);
     
     initRetroAccordion();
-    restoreTimers();
     initBoardSortMenus();
     renderBoard();
     setupDragAndDrop();
 
     if (_currentUser) {
         setupNav(_currentUser, isTechTeam);
-        drainPendingTimeOps();
     }
 
     // Weekly tab is always available (no auth required)
@@ -344,13 +297,6 @@ async function init() {
         tab.addEventListener('click', () => navigateTo('weekly'));
     });
 
-    window.addEventListener('beforeunload', flushActiveTimers);
-
-    // Open the task/activity edit modal when the user clicks a time-log block in
-    // the Weekly view (source=task|activity). Dispatched by handleWeeklyClick.
-    window.addEventListener('weekly:open-source-item', e => {
-        openEditTaskModal(e.detail.id);
-    });
 
     document.addEventListener('click',  handleClick);
     document.addEventListener('change', handleChange);

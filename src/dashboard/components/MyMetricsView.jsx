@@ -1,11 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { fetchMyMetrics, fetchUserSkills } from '../dashApi.js';
 import { useDateRange } from '../hooks/useDateRange.js';
-import { onTimeLogChanged } from '../../core/events.js';
 import PeriodSelector from './PeriodSelector.jsx';
 import KpiCard from './KpiCard.jsx';
-import { LineChart, BarChart, GaugeChart, BellChart, RadarChart } from './Charts.jsx';
-import HeatMap from './HeatMap.jsx';
+import { LineChart, GaugeChart, BellChart, RadarChart } from './Charts.jsx';
 import Treemap from './Treemap.jsx';
 import Badges from './Badges.jsx';
 
@@ -81,13 +79,6 @@ export default function MyMetricsView({ user }) {
         load(dr.range.start, dr.range.end);
     }, [dr.range.start, dr.range.end, load]);
 
-    useEffect(() => {
-        return onTimeLogChanged(() => {
-            if (fetchingRef.current) return;
-            load(rangeRef.current.start, rangeRef.current.end);
-        });
-    }, [load]);
-
     const handlePeriod = key => {
         dr.setPeriod(key);
     };
@@ -132,13 +123,12 @@ export default function MyMetricsView({ user }) {
     const iel            = data.iel ?? data.effectiveness ?? data.effectivenessIndex;
     const slaAvgDays     = data.slaAvgDays;
     const teamPercentile = data.teamPercentile;
-    const truncate       = s => (s.length > 12 ? s.slice(0, 12) + '…' : s);
 
     return (
         <>
             <Header dr={dr} onPeriod={handlePeriod} onApply={handleApplyCustom} />
 
-            {/* Row 1: KPI base (solo 4 tarjetas principales) */}
+            {/* Row 1: KPI base */}
             <div className="metrics-grid">
                 <KpiCard
                     color="primary" icon="fa-check-circle"
@@ -151,12 +141,6 @@ export default function MyMetricsView({ user }) {
                     value={data.completionRate != null ? Math.round(data.completionRate) + '%' : '—'}
                     label="Tasa de cumplimiento"
                     subtext={rateHint(data.completionRate)}
-                />
-                <KpiCard
-                    color="warning" icon="fa-clock"
-                    value={data.hoursWorked != null ? (Math.round(data.hoursWorked * 10) / 10) + 'h' : '—'}
-                    label="Horas trabajadas"
-                    subtext="tiempo registrado"
                 />
                 <KpiCard
                     color="iel" icon="fa-chart-line"
@@ -179,28 +163,8 @@ export default function MyMetricsView({ user }) {
                 </div>
             )}
 
-            {/* Previsibilidad + SLA Gauge */}
+            {/* SLA Gauge */}
             <div className="charts-grid mx">
-                <div className="chart-card">
-                    <h3 className="chart-title">
-                        <i className="fas fa-crosshairs" /> Previsibilidad – Estimado vs Real
-                    </h3>
-                    {data.predictabilityByTask?.length > 0 ? (
-                        <BarChart
-                            labels={data.predictabilityByTask.map(t => truncate(esc(t.title)))}
-                            datasets={[
-                                { label: 'Estimado (h)', data: data.predictabilityByTask.map(t => t.estimated ?? 0) },
-                                { label: 'Real (h)',     data: data.predictabilityByTask.map(t => t.actual ?? 0) },
-                            ]}
-                        />
-                    ) : (
-                        <div className="chart-placeholder">
-                            <i className="fas fa-crosshairs fa-2x" />
-                            <p>Sin datos de estimación registrados aún</p>
-                        </div>
-                    )}
-                </div>
-
                 <div className="chart-card chart-card-gauge">
                     <h3 className="chart-title">
                         <i className="fas fa-flag-checkered" /> SLA – Tiempo de cierre
@@ -228,15 +192,8 @@ export default function MyMetricsView({ user }) {
                 </div>
             </div>
 
-            {/* Deep Work + Skills Radar */}
+            {/* Skills Radar */}
             <div className="charts-grid mx">
-                <div className="chart-card">
-                    <h3 className="chart-title">
-                        <i className="fas fa-brain" /> Deep Work – últimas 12 semanas
-                    </h3>
-                    <HeatMap byDay={data.deepWorkByDay ?? {}} />
-                </div>
-
                 <div className="chart-card">
                     <h3 className="chart-title">
                         <i className="fas fa-star" /> Mis Skills

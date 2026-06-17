@@ -1,9 +1,7 @@
 import { STATE }      from '../core/state.js';
 import { createTask, updateTask, deleteTask, fetchTasks } from '../api/api.js';
-import { createTimeLog, updateTimeLog, deleteTimeLog, fetchTimeLogs } from '../api/timeLogs.js';
-import { emitTimeLogChanged } from '../core/events.js';
 import { renderBoard } from '../board/render.js';
-import { generateId, formatTime, formatDate, isOverdue, formatTimeCompact, formatLogDate }  from '../shared/utils.js';
+import { generateId, formatDate, isOverdue }  from '../shared/utils.js';
 import { CONFIG }      from '../core/config.js';
 import { openModal, closeModal, registerDirtyCheck } from '../shared/modal.js';
 import {
@@ -52,7 +50,7 @@ registerDirtyCheck('modalNewTask', _isTaskFormDirty);
 
 export function switchTab(tab) {
     currentTab = tab;
-    ['edicion', 'tiempo', 'resumen'].forEach(t => {
+    ['edicion', 'resumen'].forEach(t => {
         const btn = document.querySelector(`[data-tab="${t}"]`);
         const body = document.getElementById(`tab-${t}`);
         if (btn) {
@@ -147,31 +145,10 @@ export async function openEditTaskModal(taskId) {
 
     // Render inicial con lo que ya tenemos en STATE.
     renderResumenTab(task);
-    renderTiempoTab(task);
 
     disableRetro();
     _formSnapshot = _getFormState();
     openModal('modalNewTask');
-
-    // Hidratar time logs con IDs canónicos del backend (necesarios para edit/delete).
-    if (CONFIG.BACKEND_URL) {
-        try {
-            const logs = await fetchTimeLogs(task.id, isActivity);
-            if (Array.isArray(logs)) {
-                task.timeLog = logs.map(l => ({
-                    id: l.id,
-                    date: l.logDate,
-                    seconds: l.seconds,
-                }));
-                if (STATE.editingTaskId === task.id) {
-                    renderTiempoTab(task);
-                    renderResumenTab(task);
-                }
-            }
-        } catch (e) {
-            console.warn('[openEditTaskModal] No se pudieron hidratar time logs:', e);
-        }
-    }
 }
 
 // ── Tab Resumen (solo lectura, subtasks interactivas) ────────────────────────
@@ -202,10 +179,6 @@ function renderResumenTab(task) {
             <span class="form-label">Priority</span>
             <p>${task.priority ?? '—'}</p>
         </div>
-        <div class="mb-2">
-            <span class="form-label">Investment time</span>
-            <p style="font-size:1.25rem; font-weight:600; color:var(--color-primary);">${formatTime(task.timeSpent ?? 0)}</p>
-        </div>
         ${totalCount > 0 || (task.progress ?? 0) > 0 ? `
         <div class="mb-2">
             <span class="form-label">Progress (${pct}%)</span>
@@ -214,22 +187,6 @@ function renderResumenTab(task) {
             </div>
         </div>` : ''}
     `;
-
-    if (task.timeLog && task.timeLog.length > 0) {
-        html += `
-        <div class="mb-2">
-            <span class="form-label">Time log</span>
-            <div class="time-log mt-1">
-                ${[...task.timeLog]
-                    .sort((a, b) => b.date.localeCompare(a.date))
-                    .map(entry => `
-                        <div class="time-log-entry">
-                            <span class="time-log-date">${formatLogDate(entry.date)}</span>
-                            <span class="time-log-duration">${formatTimeCompact(entry.seconds)}</span>
-                        </div>`).join('')}
-            </div>
-        </div>`;
-    }
 
     if (totalCount > 0) {
         html += `
@@ -245,7 +202,6 @@ function renderResumenTab(task) {
                                 ${sub.completed ? '<i class="fas fa-check"></i>' : ''}
                             </div>
                             <span class="subtask-text">${escapeHtml(sub.text ?? '')}</span>
-                            <span class="subtask-time">${formatTimeCompact(sub.timeSpent ?? 0)}</span>
                         </div>`).join('')}
                 </div>
             </div>`;
@@ -311,262 +267,6 @@ export async function toggleSubtask(taskId, subtaskId) {
     renderBoard();
 }
 
-// ── Tab Tiempo ───────────────────────────────────────────────────────────────
-
-export function renderTiempoTab(task) {
-    document.getElementById('tiempo-total-display').textContent = formatTime(task.timeSpent ?? 0);
-    document.getElementById('add-time-log-form').style.display = 'none';
-    document.getElementById('inputLogDate').max = new Date().toISOString().split('T')[0];
-    renderTimeLogsList(task);
-    renderExistingDatesHint(task);
-}
-
-function renderTimeLogsList(task) {
-    const list = document.getElementById('time-logs-list');
-    if (!task.timeLog || task.timeLog.length === 0) {
-        list.innerHTML = `<div class="text-muted" style="text-align:center; padding:1rem;">No records yet</div>`;
-        return;
-    }
-
-    list.innerHTML = [...task.timeLog]
-        .sort((a, b) => b.date.localeCompare(a.date))
-        .map(entry => {
-            const key = entry.id ?? `tmp-${entry.date}`;
-            const h = Math.floor((entry.seconds ?? 0) / 3600);
-            const m = Math.floor(((entry.seconds ?? 0) % 3600) / 60);
-            const s = (entry.seconds ?? 0) % 60;
-            const editable = entry.id != null && !String(entry.id).startsWith('temp-');
-            return `
-            <div class="time-log-row">
-                <button class="btn-icon btn-delete-icon" data-action="delete-time-log" data-log-id="${key}" ${editable ? '' : 'disabled'} title="Delete">
-                    <i class="fas fa-minus-circle"></i>
-                </button>
-                <span class="time-log-date">${formatLogDate(entry.date)}</span>
-                <span class="time-log-duration">${formatTimeCompact(entry.seconds ?? 0)}</span>
-                <button class="btn-icon btn-edit-icon" data-action="edit-time-log" data-log-id="${key}" ${editable ? '' : 'disabled'} title="Edit">
-                    <i class="fas fa-pencil-alt"></i>
-                </button>
-            </div>
-            <div id="edit-time-log-form-${key}" class="time-log-add-form" style="display:none;">
-                <div class="time-log-add-row">
-                    <div class="hms-group">
-                        <input type="number" id="editLogH-${key}" class="form-input hms-input" min="0" value="${h}">
-                        <span>h</span>
-                        <input type="number" id="editLogM-${key}" class="form-input hms-input" min="0" max="59" value="${m}">
-                        <span>m</span>
-                        <input type="number" id="editLogS-${key}" class="form-input hms-input" min="0" max="59" value="${s}">
-                        <span>s</span>
-                    </div>
-                    <button class="btn btn-primary btn-sm" data-action="save-edit-time-log" data-log-id="${key}" data-log-date="${entry.date}">Guardar</button>
-                    <button class="btn btn-secondary btn-sm" data-action="cancel-edit-time-log" data-log-id="${key}">Cancelar</button>
-                </div>
-            </div>`;
-        }).join('');
-}
-
-function renderExistingDatesHint(task) {
-    const form = document.getElementById('add-time-log-form');
-    if (!form) return;
-    const existing = new Set((task.timeLog ?? []).map(l => l.date));
-    let hint = form.querySelector('.time-log-existing-hint');
-    if (!hint) {
-        hint = document.createElement('div');
-        hint.className = 'time-log-existing-hint text-muted';
-        hint.style.cssText = 'font-size:0.75rem; margin-top:.35rem;';
-        form.appendChild(hint);
-    }
-    if (existing.size === 0) {
-        hint.textContent = '';
-        return;
-    }
-    const dates = [...existing].sort().reverse().slice(0, 10).map(d => formatLogDate(d)).join(', ');
-    hint.textContent = `Fechas ya registradas (no disponibles): ${dates}${existing.size > 10 ? '…' : ''}`;
-}
-
-export function openAddTimeLog() {
-    const task = STATE.tasks.find(t => t.id === STATE.editingTaskId);
-    if (!task) return;
-
-    const form = document.getElementById('add-time-log-form');
-    form.style.display = 'block';
-    document.getElementById('inputLogH').value = 0;
-    document.getElementById('inputLogM').value = 0;
-    document.getElementById('inputLogS').value = 0;
-    document.getElementById('inputLogDate').value = new Date().toISOString().split('T')[0];
-    renderExistingDatesHint(task);
-}
-
-export function cancelAddTimeLog() {
-    document.getElementById('add-time-log-form').style.display = 'none';
-}
-
-export async function saveNewTimeLog() {
-    if (!STATE.editingTaskId) return;
-    const task = STATE.tasks.find(t => t.id === STATE.editingTaskId);
-    if (!task) return;
-
-    const date = document.getElementById('inputLogDate').value;
-    const h = parseInt(document.getElementById('inputLogH').value, 10) || 0;
-    const m = parseInt(document.getElementById('inputLogM').value, 10) || 0;
-    const s = parseInt(document.getElementById('inputLogS').value, 10) || 0;
-    const seconds = h * 3600 + m * 60 + s;
-
-    if (!date) { alert('Selecciona una fecha.'); return; }
-    if (date > new Date().toISOString().split('T')[0]) {
-        alert('No se permiten fechas futuras.');
-        return;
-    }
-    if (seconds <= 0) { alert('La duración debe ser mayor a 0.'); return; }
-    if (seconds > 86400) { alert('La duración máxima por día es 24 horas.'); return; }
-
-    task.timeLog = task.timeLog ?? [];
-    if (task.timeLog.some(l => l.date === date)) {
-        alert('Ya existe un registro para esta fecha. Edítalo en la lista.');
-        return;
-    }
-
-    // Optimista: agregar localmente con ID temporal.
-    const tempId = `temp-${Date.now()}`;
-    const tempEntry = { id: tempId, date, seconds };
-    task.timeLog.push(tempEntry);
-    task.timeSpent = (task.timeSpent ?? 0) + seconds;
-    cancelAddTimeLog();
-    renderTiempoTab(task);
-    renderResumenTab(task);
-    renderBoard();
-
-    try {
-        const res = await createTimeLog(task.id, task.type === 'activity', { logDate: date, seconds });
-        const updated = res?.task ?? res?.activity;
-        if (updated) syncTaskFromBackend(task, updated);
-        emitTimeLogChanged({ taskId: task.id, type: 'create' });
-    } catch (e) {
-        console.error('[saveNewTimeLog]', e);
-        // Revertir.
-        task.timeLog = task.timeLog.filter(l => l.id !== tempId);
-        task.timeSpent = Math.max(0, (task.timeSpent ?? 0) - seconds);
-        renderTiempoTab(task);
-        renderResumenTab(task);
-        renderBoard();
-        alert(e.code === 409
-            ? 'Ya existe un registro para esta fecha en el servidor.'
-            : 'No se pudo guardar el registro. Se reintentará automáticamente.');
-    }
-}
-
-export function openEditTimeLog(logId) {
-    const el = document.getElementById(`edit-time-log-form-${logId}`);
-    if (el) el.style.display = 'block';
-}
-
-export function cancelEditTimeLog(logId) {
-    const el = document.getElementById(`edit-time-log-form-${logId}`);
-    if (el) el.style.display = 'none';
-}
-
-export async function saveEditTimeLog(logId) {
-    const task = STATE.tasks.find(t => t.id === STATE.editingTaskId);
-    if (!task) return;
-
-    const h = parseInt(document.getElementById(`editLogH-${logId}`).value, 10) || 0;
-    const m = parseInt(document.getElementById(`editLogM-${logId}`).value, 10) || 0;
-    const s = parseInt(document.getElementById(`editLogS-${logId}`).value, 10) || 0;
-    const seconds = h * 3600 + m * 60 + s;
-
-    if (seconds > 86400) { alert('La duración máxima por día es 24 horas.'); return; }
-
-    const entry = task.timeLog.find(l => String(l.id) === String(logId));
-    if (!entry) return;
-
-    if (String(logId).startsWith('temp-')) {
-        alert('El registro aún se está guardando. Intenta de nuevo en unos segundos.');
-        return;
-    }
-
-    if (seconds === 0) return deleteTimeLogPrompt(logId);
-
-    const prevSeconds = entry.seconds;
-    const diff = seconds - prevSeconds;
-    entry.seconds = seconds;
-    task.timeSpent = Math.max(0, (task.timeSpent ?? 0) + diff);
-    cancelEditTimeLog(logId);
-    renderTiempoTab(task);
-    renderResumenTab(task);
-    renderBoard();
-
-    try {
-        const res = await updateTimeLog(logId, seconds);
-        const updated = res?.task ?? res?.activity;
-        if (updated) syncTaskFromBackend(task, updated);
-        emitTimeLogChanged({ taskId: task.id, type: 'update' });
-    } catch (e) {
-        console.error('[saveEditTimeLog]', e);
-        entry.seconds = prevSeconds;
-        task.timeSpent = Math.max(0, (task.timeSpent ?? 0) - diff);
-        renderTiempoTab(task);
-        renderResumenTab(task);
-        renderBoard();
-        alert('No se pudo actualizar el registro. Se reintentará automáticamente.');
-    }
-}
-
-export async function deleteTimeLogPrompt(logId) {
-    const task = STATE.tasks.find(t => t.id === STATE.editingTaskId);
-    if (!task) return;
-
-    const entryIndex = task.timeLog.findIndex(l => String(l.id) === String(logId));
-    if (entryIndex === -1) return;
-    const entry = task.timeLog[entryIndex];
-
-    if (!confirm(`¿Eliminar el registro del ${formatLogDate(entry.date)} (${formatTimeCompact(entry.seconds)})?`)) return;
-
-    if (String(logId).startsWith('temp-')) {
-        task.timeLog.splice(entryIndex, 1);
-        task.timeSpent = Math.max(0, (task.timeSpent ?? 0) - entry.seconds);
-        renderTiempoTab(task);
-        renderResumenTab(task);
-        renderBoard();
-        return;
-    }
-
-    task.timeLog.splice(entryIndex, 1);
-    task.timeSpent = Math.max(0, (task.timeSpent ?? 0) - entry.seconds);
-    renderTiempoTab(task);
-    renderResumenTab(task);
-    renderBoard();
-
-    try {
-        const res = await deleteTimeLog(logId);
-        const updated = res?.task ?? res?.activity;
-        if (updated) syncTaskFromBackend(task, updated);
-        emitTimeLogChanged({ taskId: task.id, type: 'delete' });
-    } catch (e) {
-        console.error('[deleteTimeLogPrompt]', e);
-        task.timeLog.splice(entryIndex, 0, entry);
-        task.timeSpent = (task.timeSpent ?? 0) + entry.seconds;
-        renderTiempoTab(task);
-        renderResumenTab(task);
-        renderBoard();
-        alert('No se pudo eliminar el registro. Se reintentará automáticamente.');
-    }
-}
-
-function syncTaskFromBackend(task, updated) {
-    if (!updated) return;
-    // Remapear timeLog a la forma {id, date, seconds}.
-    const normalizedLog = Array.isArray(updated.timeLog)
-        ? updated.timeLog.map(l => ({
-            id: l.id,
-            date: l.date ?? l.logDate,
-            seconds: l.seconds,
-        }))
-        : task.timeLog;
-    Object.assign(task, updated, { timeLog: normalizedLog });
-    renderTiempoTab(task);
-    renderResumenTab(task);
-    renderBoard();
-}
-
 // ── Subtasks (tab Edición) ───────────────────────────────────────────────────
 
 export function addSubtaskInput() {
@@ -605,7 +305,6 @@ export async function submitNewTask() {
             id:        prevId || generateId('sub'),
             text:      raw,
             completed: false,
-            timeSpent: 0,
         }));
 
     const isEditing = !!STATE.editingTaskId;
@@ -684,7 +383,6 @@ export async function submitNewTask() {
         isRetroactive: true,
         completedAt:   retro.completedAt,
         progress:      100,
-        timeLogs:      retro.timeLogs,
     } : {};
 
     const payload = {

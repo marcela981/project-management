@@ -85,14 +85,6 @@
         </div>
         <div class="kpi-card">
           <div class="kpi-header">
-            <div class="kpi-icon warning"><i class="fas fa-clock"></i></div>
-            <span class="kpi-label">Total Time</span>
-          </div>
-          <div class="kpi-value" id="kpiTiempoTotal">00:00:00</div>
-          <div class="kpi-subtext">This period</div>
-        </div>
-        <div class="kpi-card">
-          <div class="kpi-header">
             <div class="kpi-icon success"><i class="fas fa-chart-line"></i></div>
             <span class="kpi-label">IEL</span>
           </div>
@@ -172,7 +164,6 @@
         </div>
         <div class="modal-tabs" id="modalTaskTabs" style="display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 1rem;">
           <button class="tab-btn active" data-action="switch-tab" data-tab="edicion" style="flex:1; padding:0.5rem; background:transparent; border:none; border-bottom: 2px solid var(--color-primary); font-weight:bold; cursor:pointer;">Details</button>
-          <button class="tab-btn" data-action="switch-tab" data-tab="tiempo" style="flex:1; padding:0.5rem; background:transparent; border:none; border-bottom: 2px solid transparent; color:var(--text-muted); cursor:pointer;">Timing</button>
           <button class="tab-btn" data-action="switch-tab" data-tab="resumen" style="flex:1; padding:0.5rem; background:transparent; border:none; border-bottom: 2px solid transparent; color:var(--text-muted); cursor:pointer;">Overview</button>
         </div>
         <div class="modal-body" id="tab-edicion" style="display:block;">
@@ -224,38 +215,6 @@
             </button>
           </div>
         </div>
-        <div class="modal-body" id="tab-tiempo" style="display:none;">
-          <div class="mb-2" style="background:var(--bg-secondary); padding:1rem; border-radius:var(--radius-md);">
-            <div style="font-size:0.875rem; color:var(--text-muted);">Investment time (total)</div>
-            <div id="tiempo-total-display" style="font-size:1.5rem; font-weight:600; color:var(--color-primary);">00:00:00</div>
-            <div style="font-size:0.75rem; color:var(--text-muted);">Actualizado automáticamente desde los registros diarios</div>
-          </div>
-          <div class="mb-2" style="display:flex; justify-content:space-between; align-items:center;">
-            <strong>Time Logs</strong>
-            <button type="button" class="btn btn-secondary btn-sm" data-action="add-time-log">
-              <i class="fas fa-plus"></i> Agregar registro
-            </button>
-          </div>
-          <div id="add-time-log-form" style="display:none; padding:1rem; background:var(--bg-secondary); border-radius:var(--radius-md); margin-bottom:1rem;">
-             <div class="form-group">
-                <label class="form-label">Fecha</label>
-                <input type="date" id="inputLogDate" class="form-input" max="" />
-             </div>
-             <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap; margin-bottom:0.5rem;">
-                <input type="number" id="inputLogH" class="form-input" style="width:68px;" min="0" placeholder="h" value="0">
-                <span>h</span>
-                <input type="number" id="inputLogM" class="form-input" style="width:68px;" min="0" max="59" placeholder="m" value="0">
-                <span>m</span>
-                <input type="number" id="inputLogS" class="form-input" style="width:68px;" min="0" max="59" placeholder="s" value="0">
-                <span>s</span>
-             </div>
-             <div style="display:flex; gap:0.5rem;">
-                <button class="btn btn-primary btn-sm" data-action="save-new-time-log">Guardar</button>
-                <button class="btn btn-secondary btn-sm" data-action="cancel-new-time-log">Cancelar</button>
-             </div>
-          </div>
-          <div id="time-logs-list" style="display:flex; flex-direction:column; gap:0.5rem;"></div>
-        </div>
         <div class="modal-body" id="tab-resumen" style="display:none;">
           <div id="resumen-content"></div>
         </div>
@@ -289,49 +248,6 @@
     </div>
 
 
-
-    <!-- Modal auxiliar reutilizado por timer (pausa) y flujo de completar tarea.
-         No se abre desde el dropdown de la tarjeta. -->
-    <div class="modal-overlay" id="modalTaskDetail">
-      <div class="modal">
-        <div class="modal-header">
-          <h2 class="modal-title" id="modalDetailTitle"></h2>
-          <button class="modal-close" data-action="close-modal" data-modal-id="modalTaskDetail" aria-label="Close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="modal-body" id="modalDetailBody"></div>
-        <div class="modal-footer" id="modalDetailFooter"></div>
-      </div>
-    </div>
-
-    <!-- Modal: notificación de timer activo -->
-    <div class="modal-overlay" id="modalTimerNotif">
-      <div class="modal" style="max-width:420px;">
-        <div class="modal-header">
-          <h2 class="modal-title">¿Sigues trabajando?</h2>
-          <button class="modal-close" data-action="close-timer-notif" aria-label="Close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="modal-body" id="timerNotifBody"></div>
-        <div class="modal-footer" id="timerNotifFooter"></div>
-      </div>
-    </div>
-
-    <!-- Modal: acción tras respuesta "No" -->
-    <div class="modal-overlay" id="modalTimerAction">
-      <div class="modal" style="max-width:420px;">
-        <div class="modal-header">
-          <h2 class="modal-title">Detener o finalizar</h2>
-          <button class="modal-close" data-action="close-timer-action" aria-label="Close">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <div class="modal-body" id="timerActionBody"></div>
-        <div class="modal-footer" id="timerActionFooter"></div>
-      </div>
-    </div>
 
     <!-- Modal: Endorsar skill -->
     <div class="modal-overlay" id="modalEndorse">

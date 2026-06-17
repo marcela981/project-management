@@ -2,7 +2,7 @@
 
 import { STATE }      from '../core/state.js';
 import { updateKPIs } from '../kpi/kpi.js';
-import { formatTime, formatDate, isOverdue, getActivityTypeLabel, formatTimeCompact, formatLogDate, formatRelativeTime, formatTimeOfDay } from '../shared/utils.js';
+import { formatDate, isOverdue, getActivityTypeLabel, formatRelativeTime, formatTimeOfDay } from '../shared/utils.js';
 import {
     sortItems, getSort, setSort, resetSort, isDefaultSort,
     CRITERIA_ACTIVE, CRITERIA_COMPLETED,
@@ -303,9 +303,6 @@ function _priorityLabel(priority) {
 }
 
 export function createTaskCard(task) {
-    const type          = task.type;
-    const isActiveTimer = STATE.timers[type]?.taskId === task.id;
-    const timer         = STATE.timers[type];
     const completedCount  = task.subtasks.filter(s => s.completed).length;
     const totalCount      = task.subtasks.length;
     const progressPercent = task.progress
@@ -317,31 +314,11 @@ export function createTaskCard(task) {
     const completeClass = isComplete ? 'complete' : '';
 
     const card = document.createElement('div');
-    card.className = ['task-card', overdueClass, completeClass, isActiveTimer ? 'active-timer' : '']
+    card.className = ['task-card', overdueClass, completeClass]
         .filter(Boolean)
         .join(' ');
     card.draggable = !isComplete;
     card.dataset.taskId = task.id;
-
-    const showTimer          = (task.column === 'working-now' || task.column === 'activities') && !isComplete;
-    const showSubtaskSelector = showTimer && task.type !== 'activity';
-
-    const activeSubtaskId = isActiveTimer ? timer.subtaskId : null;
-    const activeSubtask   = activeSubtaskId && activeSubtaskId !== 'none'
-        ? task.subtasks.find(s => s.id === activeSubtaskId)
-        : null;
-
-    const savedSubId = STATE.selectedSubtasks[task.id];
-    const subtaskOptions = [
-        `<option value="none"${!savedSubId || savedSubId === 'none' ? ' selected' : ''}>-- No specific subtask --</option>`,
-        ...task.subtasks
-            .filter(s => !s.completed)
-            .map(s => `<option value="${s.id}"${savedSubId === s.id ? ' selected' : ''}>${s.text}</option>`)
-    ].join('');
-
-    const timerSeconds = isActiveTimer
-        ? timer.accumulated + Math.floor((Date.now() - timer.startTime) / 1000)
-        : task.timeSpent;
 
     card.innerHTML = `
         <div class="task-priority ${task.priority}"></div>
@@ -382,9 +359,6 @@ export function createTaskCard(task) {
                 <span class="task-meta-item ${overdueClass} ${completeClass}">
                     <i class="fas fa-calendar"></i>${formatDate(task.deadline)}
                 </span>` : ''}
-            <span class="task-meta-item">
-                <i class="fas fa-clock"></i>${formatTime(task.timeSpent)}
-            </span>
             ${totalCount > 0 ? `
                 <span class="task-meta-item ${completeClass}">
                     <i class="fas fa-check-square"></i>${completedCount}/${totalCount}
@@ -401,48 +375,11 @@ export function createTaskCard(task) {
                          style="width: ${progressPercent}%"></div>
                 </div>
             </div>` : ''}
-        ${showTimer ? `
-            ${showSubtaskSelector ? `
-            <div class="subtask-selector">
-                <label>Working on:</label>
-                ${isActiveTimer
-                    ? `<div class="active-subtask-name">${activeSubtask ? activeSubtask.text : '<span class="no-subtask">— General task —</span>'}</div>`
-                    : `<select data-action="select-subtask" data-task-id="${task.id}">${subtaskOptions}</select>`
-                }
-            </div>` : ''}
-            <div class="task-timer">
-                <span class="timer-display ${isActiveTimer ? 'running' : ''}" id="timer-${task.id}">
-                    ${formatTime(timerSeconds)}
-                </span>
-                <div class="timer-controls">
-                    ${isActiveTimer ? `
-                        <button class="timer-btn pause" data-action="pause-timer" data-task-id="${task.id}" title="Pause">
-                            <i class="fas fa-pause"></i>
-                        </button>
-                        <button class="timer-btn stop" data-action="stop-timer" data-task-id="${task.id}" title="Finish">
-                            <i class="fas fa-check"></i>
-                        </button>` : `
-                        <button class="timer-btn start" data-action="start-timer" data-task-id="${task.id}" title="Start">
-                            <i class="fas fa-play"></i>
-                        </button>`}
-                </div>
-            </div>` : ''}
         ${task.type === 'activity' ? `
             <div class="task-tags">
                 <span class="task-tag">
                     <i class="fas fa-tag"></i> ${getActivityTypeLabel(task.activityType)}
                 </span>
-            </div>` : ''}
-        ${task.timeLog && task.timeLog.length > 0 ? `
-            <div class="time-log">
-                ${[...task.timeLog]
-                    .sort((a, b) => b.date.localeCompare(a.date))
-                    .slice(0, 5)
-                    .map(entry => `
-                        <div class="time-log-entry">
-                            <span class="time-log-date">${formatLogDate(entry.date)}</span>
-                            <span class="time-log-duration">${formatTimeCompact(entry.seconds)}</span>
-                        </div>`).join('')}
             </div>` : ''}
     `;
 
